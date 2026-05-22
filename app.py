@@ -8,6 +8,7 @@ import pandas as pd
 import plotly.express as px
 import requests
 import os
+import re
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -49,33 +50,242 @@ ASIASANAT = {
 }
 
 ALUEET = {
-    "Pohjanmaa": ["pohjanmaa", "österbotten", "vaasa", "vasa", "kokkola", "gamlakarleby", "pietarsaari", "jakobstad", "jurva", "ilmajoki", "lapua", "kauhava"],
-    "Häme": ["häme", "tavastland", "hämeenlinna", "tavastehus", "tampere", "tammerfors"],
-    "Savo": ["savo", "savolax", "kuopio", "mikkeli", "joensuu"],
-    "Varsinais-Suomi": ["varsinais", "åbo", "turku", "raisio", "reso"],
-    "Uusimaa": ["uusimaa", "nyland", "helsinki", "helsingfors", "porvoo", "borgå"],
-    "Karjala": ["karjala", "karelien", "viipuri", "vyborg", "sortavala"],
+    "Pohjanmaa": ["pohjanmaa", "österbotten", "vaasan lääni", "vasa län"],
+    "Häme": ["häme", "tavastland", "hämeen lääni"],
+    "Savo": ["savo", "savolax", "savonlinna", "nyslott"],
+    "Varsinais-Suomi": ["varsinais-suomi", "egentliga finland"],
+    "Uusimaa": ["uusimaa", "nyland"],
+    "Karjala": ["karjala", "karelien", "karelen"],
+    "Lappi": ["lappi", "lappland", "lapinmaa"],
+    "Satakunta": ["satakunta", "björneborg"],
+    "Keski-Suomi": ["keski-suomi", "mellersta finland"],
+    "Kymenlaakso": ["kymenlaakso", "kymmene"],
 }
+
+# ── Kuntalistat ────────────────────────────────────────────────────────────────
+# Muoto: "Näytettävä nimi": [hakusanat tekstistä, min 4 merkkiä]
+# Pohjanmaa ja Etelä-Pohjanmaa erittäin kattavasti
+
+KUNNAT = {
+    # ── Etelä-Pohjanmaa ────────────────────────────────────────────────────────
+    "Alajärvi":       ["alajärvi", "alajärfs", "alajerfvi"],
+    "Alavus":         ["alavus", "alavo"],
+    "Evijärvi":       ["evijärvi", "evijärfs"],
+    "Ilmajoki":       ["ilmajoki", "ilmola"],
+    "Isojoki":        ["isojoki", "storå"],
+    "Isokyrö":        ["isokyrö", "storkyro", "stor-kyro"],
+    "Jalasjärvi":     ["jalasjärvi"],
+    "Jurva":          ["jurva"],
+    "Karijoki":       ["karijoki", "bötom"],
+    "Kauhajoki":      ["kauhajoki"],
+    "Kauhava":        ["kauhava"],
+    "Kortesjärvi":    ["kortesjärvi"],
+    "Kuortane":       ["kuortane"],
+    "Kurikka":        ["kurikka"],
+    "Laihia":         ["laihia", "laihela", "laihiaa"],
+    "Lapua":          ["lapua", "lappo"],
+    "Lehtimäki":      ["lehtimäki"],
+    "Lappajärvi":     ["lappajärvi", "lappajärfs"],
+    "Nurmo":          ["nurmo"],
+    "Peräseinäjoki":  ["peräseinäjoki"],
+    "Seinäjoki":      ["seinäjoki"],
+    "Soini":          ["soini"],
+    "Teuva":          ["teuva", "östermark"],
+    "Töysä":          ["töysä"],
+    "Vimpeli":        ["vimpeli", "vindala"],
+    "Ylihärmä":       ["ylihärmä"],
+    "Ylistaro":       ["ylistaro"],
+    "Ylänkyrö":       ["ylänkyrö"],
+    "Ähtäri":         ["ähtäri", "etseri"],
+    # ── Pohjanmaa (rannikko) ───────────────────────────────────────────────────
+    "Vaasa":          ["vaasa", "wasa", "vasa", "nikolainkaupunki"],
+    "Kokkola":        ["kokkola", "gamlakarleby", "gamla carleby"],
+    "Pietarsaari":    ["pietarsaari", "jakobstad"],
+    "Kristiinankaupunki": ["kristiinankaupunki", "kristinestad", "christinestad"],
+    "Kaskinen":       ["kaskinen", "kaskö"],
+    "Uusikaarlepyy":  ["uusikaarlepyy", "nykarleby"],
+    "Isokaarlepyy":   ["isokaarlepyy", "gamalkarleby"],
+    "Maalahti":       ["maalahti", "malax"],
+    "Mustasaari":     ["mustasaari", "korsholm"],
+    "Vähäkyrö":       ["vähäkyrö", "lillkyro"],
+    "Maksamaa":       ["maksamaa", "maxmo"],
+    "Raippaluoto":    ["raippaluoto", "replot"],
+    "Oravainen":      ["oravainen", "oravais"],
+    "Munsala":        ["munsala"],
+    "Uudenkaarlepyyn mlk": ["uudenkaarlepyyn", "nykarleby lk"],
+    "Jepua":          ["jepua", "jeppo"],
+    "Purmo":          ["purmo"],
+    "Kruunupyy":      ["kruunupyy", "kronoby"],
+    "Luoto":          ["luoto", "larsmo"],
+    "Kaarlela":       ["kaarlela", "karleby"],
+    "Alaveteli":      ["alaveteli", "nedervetil"],
+    "Kälviä":         ["kälviä", "kelviå"],
+    "Ullava":         ["ullava"],
+    "Lohtaja":        ["lohtaja", "lochteå"],
+    "Himanka":        ["himanka"],
+    "Kannus":         ["kannus"],
+    "Toholampi":      ["toholampi"],
+    "Veteli":         ["veteli", "vetil"],
+    "Halsua":         ["halsua"],
+    "Perho":          ["perho"],
+    "Kaustinen":      ["kaustinen", "kaustby"],
+    "Lestijärvi":     ["lestijärvi"],
+    # ── Keski-Pohjanmaa ────────────────────────────────────────────────────────
+    "Haapajärvi":     ["haapajärvi"],
+    "Haapavesi":      ["haapavesi"],
+    "Nivala":         ["nivala", "nivalax"],
+    "Pyhäjärvi":      ["pyhäjärvi"],
+    "Ylivieska":      ["ylivieska"],
+    "Sievi":          ["sievi", "sievi"],
+    "Alavieska":      ["alavieska"],
+    "Kalajoki":       ["kalajoki"],
+    "Merijärvi":      ["merijärvi"],
+    "Oulainen":       ["oulainen"],
+    "Reisjärvi":      ["reisjärvi"],
+    "Vihanti":        ["vihanti"],
+    # ── Muut maakunnat ─────────────────────────────────────────────────────────
+    "Helsinki":       ["helsinki", "helsingfors"],
+    "Turku":          ["turku", "åbo"],
+    "Tampere":        ["tampere", "tammerfors"],
+    "Oulu":           ["oulu", "uleåborg", "uleaborg"],
+    "Kuopio":         ["kuopio"],
+    "Jyväskylä":      ["jyväskylä"],
+    "Lahti":          ["lahti"],
+    "Pori":           ["pori", "björneborg"],
+    "Hämeenlinna":    ["hämeenlinna", "tavastehus"],
+    "Joensuu":        ["joensuu"],
+    "Rovaniemi":      ["rovaniemi"],
+    "Mikkeli":        ["mikkeli", "s:t michel", "sant michel"],
+    "Savonlinna":     ["savonlinna", "nyslott"],
+    "Kotka":          ["kotka"],
+    "Lappeenranta":   ["lappeenranta", "villmanstrand"],
+    "Viipuri":        ["viipuri", "viborg", "wyborg"],
+    "Porvoo":         ["porvoo", "borgå"],
+    "Rauma":          ["rauma", "raumo"],
+    "Kajaani":        ["kajaani", "kajana"],
+    "Raahe":          ["raahe", "brahestad"],
+    "Tammisaari":     ["tammisaari", "ekenäs"],
+    "Loviisa":        ["loviisa", "lovisa"],
+    "Hanko":          ["hanko", "hangö"],
+    "Naantali":       ["naantali", "nådendal"],
+    "Uusikaupunki":   ["uusikaupunki", "nystad"],
+    "Heinola":        ["heinola"],
+    "Iisalmi":        ["iisalmi", "idensalmi"],
+    "Lieksa":         ["lieksa"],
+    "Nurmes":         ["nurmes"],
+    "Kemi":           ["kemi"],
+    "Tornio":         ["tornio", "torneå"],
+    "Salo":           ["salo"],
+    "Forssa":         ["forssa"],
+    "Valkeakoski":    ["valkeakoski"],
+    "Nokia":          ["nokia"],
+    "Ikaalinen":      ["ikaalinen", "ikalis"],
+    "Kangasala":      ["kangasala"],
+    "Lempäälä":       ["lempäälä"],
+    "Pirkkala":       ["pirkkala", "birkala"],
+    "Ylöjärvi":       ["ylöjärvi"],
+    "Hollola":        ["hollola"],
+    "Nastola":        ["nastola"],
+    "Asikkala":       ["asikkala"],
+    "Hauho":          ["hauho"],
+    "Janakkala":      ["janakkala"],
+    "Loppi":          ["loppi"],
+    "Riihimäki":      ["riihimäki"],
+    "Hyvinkää":       ["hyvinkää", "hyvinge"],
+    "Järvenpää":      ["järvenpää"],
+    "Kerava":         ["kerava", "kervo"],
+    "Nurmijärvi":     ["nurmijärvi"],
+    "Tuusula":        ["tuusula", "tusby"],
+    "Vantaa":         ["vantaa", "vanda"],
+    "Espoo":          ["espoo", "esbo"],
+    "Lohja":          ["lohja", "lojo"],
+    "Kirkkonummi":    ["kirkkonummi", "kyrkslätt"],
+    "Sipoo":          ["sipoo", "sibbo"],
+    "Mäntsälä":       ["mäntsälä"],
+    "Pornainen":      ["pornainen", "borgnäs"],
+    "Iitti":          ["iitti", "itis"],
+    "Kouvola":        ["kouvola"],
+    "Hamina":         ["hamina", "fredrikshamn"],
+    "Imatra":         ["imatra"],
+    "Joutseno":       ["joutseno"],
+    "Ruokolahti":     ["ruokolahti"],
+    "Savitaipale":    ["savitaipale"],
+    "Taipalsaari":    ["taipalsaari"],
+    "Anjalankoski":   ["anjalankoski"],
+    "Elimäki":        ["elimäki"],
+    "Pälkäne":        ["pälkäne"],
+    "Urjala":         ["urjala"],
+    "Vesilahti":      ["vesilahti"],
+    "Huittinen":      ["huittinen", "vittis"],
+    "Kokemäki":       ["kokemäki", "kumo"],
+    "Harjavalta":     ["harjavalta"],
+    "Nakkila":        ["nakkila"],
+    "Ulvila":         ["ulvila", "ulfsby"],
+    "Eura":           ["eura"],
+    "Eurajoki":       ["eurajoki", "euraåminne"],
+    "Lieto":          ["lieto", "lundo"],
+    "Masku":          ["masku"],
+    "Nousiainen":     ["nousiainen", "nousis"],
+    "Paimio":         ["paimio", "pemar"],
+    "Parainen":       ["parainen", "pargas"],
+    "Raisio":         ["raisio", "reso"],
+    "Kaarina":        ["kaarina", "s:t karins"],
+    "Suomusjärvi":    ["suomusjärvi"],
+    "Kemiö":          ["kemiö", "kimito"],
+    "Dragsfjärd":     ["dragsfjärd"],
+    "Perniö":         ["perniö", "bjärnå"],
+    "Halikko":        ["halikko"],
+    "Pyhäranta":      ["pyhäranta"],
+    "Laitila":        ["laitila", "letala"],
+    "Mynämäki":       ["mynämäki", "virmo"],
+    "Vehmaa":         ["vehmaa", "vehmo"],
+}
+
+def etsi_kunta(teksti):
+    """Etsi kuntamaininnat tekstistä, palauta lista löydetyistä kunnista."""
+    loydetyt = []
+    teksti_lower = teksti.lower()
+    for kunta, hakusanat in KUNNAT.items():
+        for hakusana in hakusanat:
+            if len(hakusana) < 4:
+                continue
+            # Tarkista sanarajat jotta "Ii" ei osu "siinä"-sanaan
+            pattern = r'\b' + re.escape(hakusana) + r'\b'
+            if re.search(pattern, teksti_lower):
+                loydetyt.append(kunta)
+                break
+    return loydetyt[:2]  # max 2 kuntaa per tulos
+
 
 def generoi_tagit(src, indeksi_avain):
     tagit = []
     teksti_kentta = "transcript" if indeksi_avain == "df" else "teksti"
     teksti = (src.get(teksti_kentta, "") or "").lower()
     aineisto = (src.get("aineistokokonaisuus", "") or "").lower()
+    haku_teksti = teksti + " " + aineisto
 
+    # Vuosisatatägi
     try:
         vuosi = int(src.get("alkuvuosi", src.get("dating_start_year", 0)) or 0)
         if vuosi:
-            vuosisata = ((vuosi - 1) // 100) + 1
-            tagit.append(f"📅 {vuosisata}00-luku")
+            vuosisata = (vuosi // 100) * 100
+            tagit.append(f"📅 {vuosisata}-luku")
     except (TypeError, ValueError):
         pass
 
-    for alue, hakusanat in ALUEET.items():
-        if any(s in aineisto or s in teksti for s in hakusanat):
-            tagit.append(f"📍 {alue}")
-            break
+    # Kuntatägit (ennen aluetta – tarkempi tieto)
+    kunnat = etsi_kunta(haku_teksti)
+    for kunta in kunnat:
+        tagit.append(f"🏘️ {kunta}")
 
+    # Aluetägi vain jos kuntaa ei löydy
+    if not kunnat:
+        for alue, hakusanat in ALUEET.items():
+            if any(s in haku_teksti for s in hakusanat):
+                tagit.append(f"📍 {alue}")
+                break
+
+    # Asiasanatägit
     loydetyt = []
     for tagi, hakusanat in ASIASANAT.items():
         if any(s in teksti for s in hakusanat):
@@ -87,7 +297,7 @@ def generoi_tagit(src, indeksi_avain):
         if kieli:
             tagit.append(f"🗣️ {kieli}")
 
-    return tagit[:4]
+    return tagit[:5]  # max 5 tägejä
 
 
 def hae_api_avain():
@@ -288,10 +498,9 @@ def nayta_tulos(tulos, idx, indeksi_avain):
         st.divider()
 
 
-def suodata_ja_jarjesta(tulokset, indeksi_avain, jarjestys, valitut_tagit, teksti_filtteri):
+def suodata_ja_jarjesta(tulokset, indeksi_avain, jarjestys, aineisto_filtteri, valitut_tagit, teksti_filtteri):
     vuosi_kentta = "dating_start_year" if indeksi_avain == "df" else "alkuvuosi"
 
-    # Tekstifiltteri
     if teksti_filtteri:
         teksti_kentta = "transcript" if indeksi_avain == "df" else "teksti"
         tulokset = [
@@ -299,14 +508,18 @@ def suodata_ja_jarjesta(tulokset, indeksi_avain, jarjestys, valitut_tagit, tekst
             if teksti_filtteri.lower() in t["_source"].get(teksti_kentta, "").lower()
         ]
 
-    # Tägifiltteri – näytä vain tulokset joilla KAIKKI valitut tägit
+    if aineisto_filtteri and aineisto_filtteri != "Kaikki":
+        tulokset = [
+            t for t in tulokset
+            if t["_source"].get("aineistokokonaisuus", "") == aineisto_filtteri
+        ]
+
     if valitut_tagit:
         def tulos_sisaltaa_tagit(t):
             tuloksen_tagit = generoi_tagit(t["_source"], indeksi_avain)
             return all(tagi in tuloksen_tagit for tagi in valitut_tagit)
         tulokset = [t for t in tulokset if tulos_sisaltaa_tagit(t)]
 
-    # Järjestely
     def hae_vuosi(t):
         v = t["_source"].get(vuosi_kentta)
         try:
@@ -402,7 +615,6 @@ def main():
             if resp:
                 osumia = resp.get("hits", {}).get("total", {}).get("value", 0)
                 tulokset_raw = resp.get("hits", {}).get("hits", [])
-
                 if osumia == 0:
                     st.warning(f"Ei osumia haulle '{hakusana}' valituilla kriteereillä.")
                 else:
@@ -419,45 +631,47 @@ def main():
             osumia = st.session_state["osumia"]
             tulosten_maara_sessio = st.session_state["tulosten_maara"]
 
-            # KPI-kortit
             nayta_kpi_kortit(osumia, tulokset_raw, indeksi_avain_sessio, len(tulokset_raw))
             st.divider()
-
-            # Visualisoinnit
             nayta_visualisoinnit(resp, indeksi_avain_sessio)
             st.divider()
 
             # ── Filtterit juuri ennen tuloksia ─────────────────────────────────
             st.subheader("Järjestely ja suodatus")
-            fcol1, fcol2 = st.columns([1, 2])
 
+            fcol1, fcol2, fcol3 = st.columns(3)
             with fcol1:
                 jarjestys = st.selectbox("Järjestys", ["Osuvin ensin", "Vanhin ensin", "Uusin ensin"])
-
             with fcol2:
-                teksti_filtteri = st.text_input("Hae tuloksista", placeholder="Rajaa sanalla...",
-                                                 help="Suodattaa jo ladattuja tuloksia")
+                aineistot = sorted(set(
+                    t["_source"].get("aineistokokonaisuus", "")
+                    for t in tulokset_raw
+                    if t["_source"].get("aineistokokonaisuus")
+                ))
+                if aineistot and indeksi_avain_sessio != "df":
+                    aineisto_filtteri = st.selectbox("Aineisto", ["Kaikki"] + aineistot)
+                else:
+                    aineisto_filtteri = "Kaikki"
+                    st.selectbox("Aineisto", ["Kaikki"], disabled=True)
+            with fcol3:
+                teksti_filtteri = st.text_input("Hae tuloksista", placeholder="Rajaa sanalla...")
 
-            # Kerää kaikki uniikit tägit tuloksista
             kaikki_tagit = sorted(set(
                 tagi
                 for t in tulokset_raw
                 for tagi in generoi_tagit(t["_source"], indeksi_avain_sessio)
             ))
-
             valitut_tagit = st.multiselect(
                 "Suodata tägien mukaan",
                 options=kaikki_tagit,
                 placeholder="Valitse yksi tai useampi tägi...",
-                help="Näyttää vain tulokset joilla kaikki valitut tägit esiintyvät"
             )
 
             st.divider()
 
-            # Suodata ja järjestä
             tulokset = suodata_ja_jarjesta(
                 tulokset_raw, indeksi_avain_sessio,
-                jarjestys, valitut_tagit, teksti_filtteri
+                jarjestys, aineisto_filtteri, valitut_tagit, teksti_filtteri
             )
 
             if osumia > tulosten_maara_sessio:
@@ -488,18 +702,19 @@ def main():
         | Diplomatarium Fennicum | Keskiaikaiset asiakirjat | ~1100–1540 |
 
         ### Automaattiset tägit
-        Jokainen tulos saa automaattisesti tägit asiakirjan sisällön perusteella:
-        vuosisata, maantieteellinen alue ja asiasisältö (oikeudenkäynti, kauppa, perintö jne.)
-        Tägejä voi käyttää suoraan filttereinä multiselect-valikosta.
+        Jokainen tulos saa automaattisesti tägit:
+        - 📅 Vuosisata
+        - 🏘️ Kunta (tunnistetaan tekstistä, yli 200 kuntaa ml. lakkautetut)
+        - 📍 Maakunta (jos kuntaa ei tunnisteta)
+        - Asiasisältö: ⚖️ Oikeudenkäynti, 💰 Kauppa & velka, 🏠 Perintö & omaisuus jne.
+
+        Pohjanmaa ja Etelä-Pohjanmaa ovat erityisen kattavasti mukana.
 
         ### Järjestely ja suodatus
-        Kaavioiden jälkeen, juuri ennen tuloksia:
         - **Järjestys:** Osuvin / Vanhin / Uusin ensin
-        - **Hae tuloksista:** Kirjoita sana joka täytyy löytyä tekstistä
-        - **Suodata tägien mukaan:** Valitse yksi tai useampi tägi
-
-        ### Nimivariaatiot
-        Esim. *Juho* → Johan, Johannes, Juhana, Juhani.
+        - **Aineisto:** Rajaa tiettyyn arkistoaineistokokonaisuuteen
+        - **Hae tuloksista:** Suodattaa ladattuja tuloksia tekstin perusteella
+        - **Tägifiltteri:** Valitse yksi tai useampi tägi
 
         ### Linkit Astiaan
         Tuomiokirja-aineiston tuloksissa on suora linkki alkuperäisen asiakirjan tarkasteluun.
