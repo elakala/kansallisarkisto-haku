@@ -49,6 +49,175 @@ ASIASANAT = {
     "🌾 Maatalous": ["talo", "torppari", "ratsutila", "pelto", "heinä", "hevonen", "bonde", "torpare", "åker", "häst"],
 }
 
+# ── Aineistokokonaisuus → Maakunta -hakemisto ─────────────────────────────────
+# Avain = sana joka esiintyy aineistokokonaisuuden alussa (ennen "tuomiokunnan" tms.)
+# Arvo = maakunta
+AINEISTO_MAAKUNTA = {
+    # Etelä-Pohjanmaa
+    "Etelä-Pohjanmaan": "Etelä-Pohjanmaa",
+    "Ilmajoen": "Etelä-Pohjanmaa",
+    "Kauhajoen": "Etelä-Pohjanmaa",
+    "Lapuan": "Etelä-Pohjanmaa",
+    "Alavuden": "Etelä-Pohjanmaa",
+    "Kuortaneen": "Etelä-Pohjanmaa",
+    "Lappajärven": "Etelä-Pohjanmaa",
+    "Evijärven": "Etelä-Pohjanmaa",
+    "Isojoen": "Etelä-Pohjanmaa",
+    "Jurvan": "Etelä-Pohjanmaa",
+    "Karijoen": "Etelä-Pohjanmaa",
+    "Teuvan": "Etelä-Pohjanmaa",
+    "Isokyrön": "Etelä-Pohjanmaa",
+    "Ylistaron": "Etelä-Pohjanmaa",
+    "Seinäjoen": "Etelä-Pohjanmaa",
+    "Jalasjärven": "Etelä-Pohjanmaa",
+    "Kurikka": "Etelä-Pohjanmaa",
+    "Kurikan": "Etelä-Pohjanmaa",
+    # Pohjanmaa (rannikko)
+    "Pohjanmaan": "Pohjanmaa",
+    "Vaasan": "Pohjanmaa",
+    "Närpiön": "Pohjanmaa",
+    "Uudenkaarlepyyn": "Pohjanmaa",
+    "Isokaarlepyyn": "Pohjanmaa",
+    "Mustasaaren": "Pohjanmaa",
+    "Maalahden": "Pohjanmaa",
+    "Kristiinankaupungin": "Pohjanmaa",
+    "Kaskisten": "Pohjanmaa",
+    "Oravaisten": "Pohjanmaa",
+    # Keski-Pohjanmaa
+    "Keski-Pohjanmaan": "Keski-Pohjanmaa",
+    "Kokkolan": "Keski-Pohjanmaa",
+    "Kruunupyyn": "Keski-Pohjanmaa",
+    "Kaustisen": "Keski-Pohjanmaa",
+    "Vetelin": "Keski-Pohjanmaa",
+    "Kannuksen": "Keski-Pohjanmaa",
+    "Toholammin": "Keski-Pohjanmaa",
+    # Pirkanmaa
+    "Tyrvään": "Pirkanmaa",
+    "Ikaalisten": "Pirkanmaa",
+    "Tampereen": "Pirkanmaa",
+    "Tammelan": "Pirkanmaa",
+    "Pirkkalan": "Pirkanmaa",
+    "Ruoveden": "Pirkanmaa",
+    "Laukaan": "Pirkanmaa",
+    "Ylöjärven": "Pirkanmaa",
+    "Kangasalan": "Pirkanmaa",
+    "Hämeenkyrön": "Pirkanmaa",
+    "Urjalan": "Pirkanmaa",
+    "Vammalan": "Pirkanmaa",
+    # Varsinais-Suomi
+    "Turun": "Varsinais-Suomi",
+    "Rauman": "Varsinais-Suomi",
+    "Salon": "Varsinais-Suomi",
+    "Loimaan": "Varsinais-Suomi",
+    "Maskun": "Varsinais-Suomi",
+    "Paimion": "Varsinais-Suomi",
+    "Paraisten": "Varsinais-Suomi",
+    "Mynämäen": "Varsinais-Suomi",
+    "Naantalin": "Varsinais-Suomi",
+    "Uudenkaupungin": "Varsinais-Suomi",
+    "Halikko": "Varsinais-Suomi",
+    "Halikon": "Varsinais-Suomi",
+    "Perniön": "Varsinais-Suomi",
+    "Vehmaan": "Varsinais-Suomi",
+    # Satakunta
+    "Porin": "Satakunta",
+    "Ulvilan": "Satakunta",
+    "Euran": "Satakunta",
+    "Kokemäen": "Satakunta",
+    "Huittisten": "Satakunta",
+    "Harjavallan": "Satakunta",
+    "Raaseporin": "Satakunta",
+    # Häme
+    "Hämeenlinnan": "Kanta-Häme",
+    "Tammelan": "Kanta-Häme",
+    "Forssan": "Kanta-Häme",
+    "Riihimäen": "Kanta-Häme",
+    "Janakkalan": "Kanta-Häme",
+    "Hattulan": "Kanta-Häme",
+    "Hausjärven": "Kanta-Häme",
+    "Lopun": "Kanta-Häme",
+    # Päijät-Häme
+    "Lahden": "Päijät-Häme",
+    "Hollolan": "Päijät-Häme",
+    "Heinolan": "Päijät-Häme",
+    "Nastolan": "Päijät-Häme",
+    "Asikkalan": "Päijät-Häme",
+    "Sysmän": "Päijät-Häme",
+    # Uusimaa
+    "Helsingin": "Uusimaa",
+    "Espoon": "Uusimaa",
+    "Vantaan": "Uusimaa",
+    "Porvoon": "Uusimaa",
+    "Lohjan": "Uusimaa",
+    "Hyvinkään": "Uusimaa",
+    "Järvenpään": "Uusimaa",
+    "Nurmijärven": "Uusimaa",
+    "Tuusulan": "Uusimaa",
+    "Kirkkonummen": "Uusimaa",
+    "Sipoon": "Uusimaa",
+    "Tammisaaren": "Uusimaa",
+    "Hangon": "Uusimaa",
+    "Loviisan": "Uusimaa",
+    # Kymenlaakso
+    "Kotkan": "Kymenlaakso",
+    "Kouvolan": "Kymenlaakso",
+    "Haminan": "Kymenlaakso",
+    "Imatran": "Kymenlaakso",
+    "Elimäen": "Kymenlaakso",
+    "Anjalankosken": "Kymenlaakso",
+    "Iitin": "Kymenlaakso",
+    # Etelä-Karjala
+    "Lappeenrannan": "Etelä-Karjala",
+    "Viipurin": "Etelä-Karjala",
+    "Joutsenon": "Etelä-Karjala",
+    "Ruokolahden": "Etelä-Karjala",
+    "Savitaipaleen": "Etelä-Karjala",
+    # Etelä-Savo
+    "Mikkelin": "Etelä-Savo",
+    "Savonlinnan": "Etelä-Savo",
+    "Pieksämäen": "Etelä-Savo",
+    "Heinäveden": "Etelä-Savo",
+    # Pohjois-Savo
+    "Kuopion": "Pohjois-Savo",
+    "Iisalmen": "Pohjois-Savo",
+    "Varkauden": "Pohjois-Savo",
+    "Suonenjoen": "Pohjois-Savo",
+    # Pohjois-Karjala
+    "Joensuun": "Pohjois-Karjala",
+    "Lieksan": "Pohjois-Karjala",
+    "Nurmeksen": "Pohjois-Karjala",
+    "Kiteen": "Pohjois-Karjala",
+    "Tohmajärven": "Pohjois-Karjala",
+    # Keski-Suomi
+    "Jyväskylän": "Keski-Suomi",
+    "Äänekosken": "Keski-Suomi",
+    "Jämsän": "Keski-Suomi",
+    "Saarijärven": "Keski-Suomi",
+    "Viitasaaren": "Keski-Suomi",
+    "Laukaan": "Keski-Suomi",
+    "Liperin": "Keski-Suomi",
+    # Pohjois-Pohjanmaa
+    "Oulun": "Pohjois-Pohjanmaa",
+    "Oulun laamannikunnan": "Pohjois-Pohjanmaa",
+    "Raahen": "Pohjois-Pohjanmaa",
+    "Ylivieskan": "Pohjois-Pohjanmaa",
+    "Haapajärven": "Pohjois-Pohjanmaa",
+    "Kalajoen": "Pohjois-Pohjanmaa",
+    "Oulaisten": "Pohjois-Pohjanmaa",
+    "Nivalan": "Pohjois-Pohjanmaa",
+    "Pyhäjärven": "Pohjois-Pohjanmaa",
+    # Lappi
+    "Rovaniemen": "Lappi",
+    "Kemin": "Lappi",
+    "Tornion": "Lappi",
+    "Sodankylän": "Lappi",
+    # Kainuu
+    "Kajaanin": "Kainuu",
+    "Sotkamon": "Kainuu",
+    "Kuhmon": "Kainuu",
+}
+
+
 ALUEET = {
     "Pohjanmaa": ["pohjanmaa", "österbotten", "vaasan lääni", "vasa län"],
     "Häme": ["häme", "tavastland", "hämeen lääni"],
@@ -66,203 +235,39 @@ ALUEET = {
 # Muoto: "Näytettävä nimi": [hakusanat tekstistä, min 4 merkkiä]
 # Pohjanmaa ja Etelä-Pohjanmaa erittäin kattavasti
 
-KUNNAT = {
-    # ── Etelä-Pohjanmaa ────────────────────────────────────────────────────────
-    "Alajärvi":       ["alajärvi", "alajärfs", "alajerfvi"],
-    "Alavus":         ["alavus", "alavo"],
-    "Evijärvi":       ["evijärvi", "evijärfs"],
-    "Ilmajoki":       ["ilmajoki", "ilmola"],
-    "Isojoki":        ["isojoki", "storå"],
-    "Isokyrö":        ["isokyrö", "storkyro", "stor-kyro"],
-    "Jalasjärvi":     ["jalasjärvi"],
-    "Jurva":          ["jurva"],
-    "Karijoki":       ["karijoki", "bötom"],
-    "Kauhajoki":      ["kauhajoki"],
-    "Kauhava":        ["kauhava"],
-    "Kortesjärvi":    ["kortesjärvi"],
-    "Kuortane":       ["kuortane"],
-    "Kurikka":        ["kurikka"],
-    "Laihia":         ["laihia", "laihela", "laihiaa"],
-    "Lapua":          ["lapua", "lappo"],
-    "Lehtimäki":      ["lehtimäki"],
-    "Lappajärvi":     ["lappajärvi", "lappajärfs"],
-    "Nurmo":          ["nurmo"],
-    "Peräseinäjoki":  ["peräseinäjoki"],
-    "Seinäjoki":      ["seinäjoki"],
-    "Soini":          ["soini"],
-    "Teuva":          ["teuva", "östermark"],
-    "Töysä":          ["töysä"],
-    "Vimpeli":        ["vimpeli", "vindala"],
-    "Ylihärmä":       ["ylihärmä"],
-    "Ylistaro":       ["ylistaro"],
-    "Ylänkyrö":       ["ylänkyrö"],
-    "Ähtäri":         ["ähtäri", "etseri"],
-    # ── Pohjanmaa (rannikko) ───────────────────────────────────────────────────
-    "Vaasa":          ["vaasa", "wasa", "vasa", "nikolainkaupunki"],
-    "Kokkola":        ["kokkola", "gamlakarleby", "gamla carleby"],
-    "Pietarsaari":    ["pietarsaari", "jakobstad"],
-    "Kristiinankaupunki": ["kristiinankaupunki", "kristinestad", "christinestad"],
-    "Kaskinen":       ["kaskinen", "kaskö"],
-    "Uusikaarlepyy":  ["uusikaarlepyy", "nykarleby"],
-    "Isokaarlepyy":   ["isokaarlepyy", "gamalkarleby"],
-    "Maalahti":       ["maalahti", "malax"],
-    "Mustasaari":     ["mustasaari", "korsholm"],
-    "Vähäkyrö":       ["vähäkyrö", "lillkyro"],
-    "Maksamaa":       ["maksamaa", "maxmo"],
-    "Raippaluoto":    ["raippaluoto", "replot"],
-    "Oravainen":      ["oravainen", "oravais"],
-    "Munsala":        ["munsala"],
-    "Uudenkaarlepyyn mlk": ["uudenkaarlepyyn", "nykarleby lk"],
-    "Jepua":          ["jepua", "jeppo"],
-    "Purmo":          ["purmo"],
-    "Kruunupyy":      ["kruunupyy", "kronoby"],
-    "Luoto":          ["luoto", "larsmo"],
-    "Kaarlela":       ["kaarlela", "karleby"],
-    "Alaveteli":      ["alaveteli", "nedervetil"],
-    "Kälviä":         ["kälviä", "kelviå"],
-    "Ullava":         ["ullava"],
-    "Lohtaja":        ["lohtaja", "lochteå"],
-    "Himanka":        ["himanka"],
-    "Kannus":         ["kannus"],
-    "Toholampi":      ["toholampi"],
-    "Veteli":         ["veteli", "vetil"],
-    "Halsua":         ["halsua"],
-    "Perho":          ["perho"],
-    "Kaustinen":      ["kaustinen", "kaustby"],
-    "Lestijärvi":     ["lestijärvi"],
-    # ── Keski-Pohjanmaa ────────────────────────────────────────────────────────
-    "Haapajärvi":     ["haapajärvi"],
-    "Haapavesi":      ["haapavesi"],
-    "Nivala":         ["nivala", "nivalax"],
-    "Pyhäjärvi":      ["pyhäjärvi"],
-    "Ylivieska":      ["ylivieska"],
-    "Sievi":          ["sievi", "sievi"],
-    "Alavieska":      ["alavieska"],
-    "Kalajoki":       ["kalajoki"],
-    "Merijärvi":      ["merijärvi"],
-    "Oulainen":       ["oulainen"],
-    "Reisjärvi":      ["reisjärvi"],
-    "Vihanti":        ["vihanti"],
-    # ── Muut maakunnat ─────────────────────────────────────────────────────────
-    "Helsinki":       ["helsinki", "helsingfors"],
-    "Turku":          ["turku", "åbo"],
-    "Tampere":        ["tampere", "tammerfors"],
-    "Oulu":           ["oulu", "uleåborg", "uleaborg"],
-    "Kuopio":         ["kuopio"],
-    "Jyväskylä":      ["jyväskylä"],
-    "Lahti":          ["lahti"],
-    "Pori":           ["pori", "björneborg"],
-    "Hämeenlinna":    ["hämeenlinna", "tavastehus"],
-    "Joensuu":        ["joensuu"],
-    "Rovaniemi":      ["rovaniemi"],
-    "Mikkeli":        ["mikkeli", "s:t michel", "sant michel"],
-    "Savonlinna":     ["savonlinna", "nyslott"],
-    "Kotka":          ["kotka"],
-    "Lappeenranta":   ["lappeenranta", "villmanstrand"],
-    "Viipuri":        ["viipuri", "viborg", "wyborg"],
-    "Porvoo":         ["porvoo", "borgå"],
-    "Rauma":          ["rauma", "raumo"],
-    "Kajaani":        ["kajaani", "kajana"],
-    "Raahe":          ["raahe", "brahestad"],
-    "Tammisaari":     ["tammisaari", "ekenäs"],
-    "Loviisa":        ["loviisa", "lovisa"],
-    "Hanko":          ["hanko", "hangö"],
-    "Naantali":       ["naantali", "nådendal"],
-    "Uusikaupunki":   ["uusikaupunki", "nystad"],
-    "Heinola":        ["heinola"],
-    "Iisalmi":        ["iisalmi", "idensalmi"],
-    "Lieksa":         ["lieksa"],
-    "Nurmes":         ["nurmes"],
-    "Kemi":           ["kemi"],
-    "Tornio":         ["tornio", "torneå"],
-    "Salo":           ["salo"],
-    "Forssa":         ["forssa"],
-    "Valkeakoski":    ["valkeakoski"],
-    "Nokia":          ["nokia"],
-    "Ikaalinen":      ["ikaalinen", "ikalis"],
-    "Kangasala":      ["kangasala"],
-    "Lempäälä":       ["lempäälä"],
-    "Pirkkala":       ["pirkkala", "birkala"],
-    "Ylöjärvi":       ["ylöjärvi"],
-    "Hollola":        ["hollola"],
-    "Nastola":        ["nastola"],
-    "Asikkala":       ["asikkala"],
-    "Hauho":          ["hauho"],
-    "Janakkala":      ["janakkala"],
-    "Loppi":          ["loppi"],
-    "Riihimäki":      ["riihimäki"],
-    "Hyvinkää":       ["hyvinkää", "hyvinge"],
-    "Järvenpää":      ["järvenpää"],
-    "Kerava":         ["kerava", "kervo"],
-    "Nurmijärvi":     ["nurmijärvi"],
-    "Tuusula":        ["tuusula", "tusby"],
-    "Vantaa":         ["vantaa", "vanda"],
-    "Espoo":          ["espoo", "esbo"],
-    "Lohja":          ["lohja", "lojo"],
-    "Kirkkonummi":    ["kirkkonummi", "kyrkslätt"],
-    "Sipoo":          ["sipoo", "sibbo"],
-    "Mäntsälä":       ["mäntsälä"],
-    "Pornainen":      ["pornainen", "borgnäs"],
-    "Iitti":          ["iitti", "itis"],
-    "Kouvola":        ["kouvola"],
-    "Hamina":         ["hamina", "fredrikshamn"],
-    "Imatra":         ["imatra"],
-    "Joutseno":       ["joutseno"],
-    "Ruokolahti":     ["ruokolahti"],
-    "Savitaipale":    ["savitaipale"],
-    "Taipalsaari":    ["taipalsaari"],
-    "Anjalankoski":   ["anjalankoski"],
-    "Elimäki":        ["elimäki"],
-    "Pälkäne":        ["pälkäne"],
-    "Urjala":         ["urjala"],
-    "Vesilahti":      ["vesilahti"],
-    "Huittinen":      ["huittinen", "vittis"],
-    "Kokemäki":       ["kokemäki", "kumo"],
-    "Harjavalta":     ["harjavalta"],
-    "Nakkila":        ["nakkila"],
-    "Ulvila":         ["ulvila", "ulfsby"],
-    "Eura":           ["eura"],
-    "Eurajoki":       ["eurajoki", "euraåminne"],
-    "Lieto":          ["lieto", "lundo"],
-    "Masku":          ["masku"],
-    "Nousiainen":     ["nousiainen", "nousis"],
-    "Paimio":         ["paimio", "pemar"],
-    "Parainen":       ["parainen", "pargas"],
-    "Raisio":         ["raisio", "reso"],
-    "Kaarina":        ["kaarina", "s:t karins"],
-    "Suomusjärvi":    ["suomusjärvi"],
-    "Kemiö":          ["kemiö", "kimito"],
-    "Dragsfjärd":     ["dragsfjärd"],
-    "Perniö":         ["perniö", "bjärnå"],
-    "Halikko":        ["halikko"],
-    "Pyhäranta":      ["pyhäranta"],
-    "Laitila":        ["laitila", "letala"],
-    "Mynämäki":       ["mynämäki", "virmo"],
-    "Vehmaa":         ["vehmaa", "vehmo"],
-}
+def etsi_paikkakunta_aineistosta(aineistokokonaisuus):
+    """Pura paikkakunta ja maakunta aineistokokonaisuuden nimestä."""
+    if not aineistokokonaisuus:
+        return None, None
 
-def etsi_kunta(teksti):
-    """Etsi kuntamaininnat tekstistä, palauta lista löydetyistä kunnista."""
-    loydetyt = []
-    teksti_lower = teksti.lower()
-    for kunta, hakusanat in KUNNAT.items():
-        for hakusana in hakusanat:
-            if len(hakusana) < 4:
-                continue
-            # Tarkista sanarajat jotta "Ii" ei osu "siinä"-sanaan
-            pattern = r'\b' + re.escape(hakusana) + r'\b'
-            if re.search(pattern, teksti_lower):
-                loydetyt.append(kunta)
-                break
-    return loydetyt[:2]  # max 2 kuntaa per tulos
+    # Irrotetaan ensimmäinen osa ennen "tuomiokunnan", "hovioikeuden" jne.
+    erottimet = [
+        " tuomiokunnan", " hovioikeuden", " raastuvanoikeuden",
+        " laamannikunnan", " alisen ", " ylisen ", " itäisen ", " läntisen "
+    ]
+    paikkakunta = aineistokokonaisuus
+    for erotin in erottimet:
+        if erotin in paikkakunta.lower():
+            paikkakunta = paikkakunta[:paikkakunta.lower().index(erotin)]
+            break
 
+    # Siivotaan sulkeet pois lopusta
+    paikkakunta = paikkakunta.split("(")[0].strip()
+
+    # Haetaan maakunta hakemistosta
+    maakunta = None
+    for avain, mk in AINEISTO_MAAKUNTA.items():
+        if paikkakunta.lower().startswith(avain.lower()):
+            maakunta = mk
+            break
+
+    return paikkakunta if len(paikkakunta) > 2 else None, maakunta
 
 def generoi_tagit(src, indeksi_avain):
     tagit = []
     teksti_kentta = "transcript" if indeksi_avain == "df" else "teksti"
     teksti = (src.get(teksti_kentta, "") or "").lower()
-    aineisto = (src.get("aineistokokonaisuus", "") or "").lower()
-    haku_teksti = teksti + " " + aineisto
+    aineistokokonaisuus = src.get("aineistokokonaisuus", "") or ""
 
     # Vuosisatatägi
     try:
@@ -273,19 +278,20 @@ def generoi_tagit(src, indeksi_avain):
     except (TypeError, ValueError):
         pass
 
-    # Kuntatägit (ennen aluetta – tarkempi tieto)
-    kunnat = etsi_kunta(haku_teksti)
-    for kunta in kunnat:
-        tagit.append(f"🏘️ {kunta}")
+    # Paikkakunta- ja maakuntätägi aineistokokonaisuudesta
+    if indeksi_avain != "df":
+        paikkakunta, maakunta = etsi_paikkakunta_aineistosta(aineistokokonaisuus)
+        if paikkakunta:
+            tagit.append(f"📍 {paikkakunta}")
+        if maakunta:
+            tagit.append(f"🗺️ {maakunta}")
+    else:
+        # DF: antopaikka
+        paikka = src.get("issuingplace", "")
+        if paikka:
+            tagit.append(f"📍 {paikka}")
 
-    # Aluetägi vain jos kuntaa ei löydy
-    if not kunnat:
-        for alue, hakusanat in ALUEET.items():
-            if any(s in haku_teksti for s in hakusanat):
-                tagit.append(f"📍 {alue}")
-                break
-
-    # Asiasanatägit
+    # Asiasanatägit (max 2)
     loydetyt = []
     for tagi, hakusanat in ASIASANAT.items():
         if any(s in teksti for s in hakusanat):
