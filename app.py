@@ -362,6 +362,17 @@ def rakenna_kysely(hakusana, vuosi_alku, vuosi_loppu, indeksi, nimivariaatiot, m
 
     aikasuodatin = {"range": {vuosi_kentta_alku: {"gte": vuosi_alku, "lte": vuosi_loppu}}}
 
+    # Maakuntasuodatin
+    filters = [aikasuodatin]
+    if maakunta_filtteri and indeksi != "df":
+        aineisto_avaimet = hae_maakunnan_aineistot(maakunta_filtteri)
+        if aineisto_avaimet:
+            maakunta_should = [
+                {"prefix": {"aineistokokonaisuus.keyword": {"value": avain}}}
+                for avain in aineisto_avaimet
+            ]
+            filters.append({"bool": {"should": maakunta_should, "minimum_should_match": 1}})
+
     highlight = {
         "fields": {teksti_kentta: {"fragment_size": 500, "number_of_fragments": 2}},
         "pre_tags": ["**"],
@@ -379,7 +390,7 @@ def rakenna_kysely(hakusana, vuosi_alku, vuosi_loppu, indeksi, nimivariaatiot, m
         }
 
     return {
-        "query": {"bool": {"must": teksti_osa, "filter": filters}},
+        "query": {"bool": {"must": [teksti_osa], "filter": filters}},
         "highlight": highlight,
         "aggs": aggs,
         "size": 100,
