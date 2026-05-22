@@ -318,36 +318,36 @@ def rakenna_kysely(hakusana, vuosi_alku, vuosi_loppu, indeksi, nimivariaatiot):
     teksti_kentta = "transcript" if indeksi == "df" else "teksti"
     vuosi_kentta_alku = "dating_start_year" if indeksi == "df" else "alkuvuosi"
 
-    # Pilkulla eroteltu AND-haku: "Mäntylä, Jurva" -> molemmat pitää löytyä
-    and_termit = [s.strip() for s in hakusana.split(",") if s.strip()]
-
-    def tee_match(termi):
-        """Yksittäinen match-kysely fuzzinessillä tai nimivariaatioilla."""
-        if nimivariaatiot:
-            alempi = termi.lower()
-            if alempi in NIMIVARIAATIOT:
-                # Nimivariaatiot: should-kysely (OR)
-                return {
-                    "bool": {
-                        "should": [
-                            {"match": {teksti_kentta: {"query": s, "fuzziness": "AUTO"}}}
-                            for s in NIMIVARIAATIOT[alempi]
-                        ],
-                        "minimum_should_match": 1
-                    }
-                }
-        # Yksittäinen termi fuzzinessillä
-        return {"match": {teksti_kentta: {"query": termi, "fuzziness": "AUTO"}}}
-
-    if len(and_termit) == 1:
-        teksti_osa = tee_match(and_termit[0])
+    # Nimivariaatiot: laajennetaan hakua OR-logiikalla
+    if nimivariaatiot:
+        alempi = hakusana.strip().lower()
+        if alempi in NIMIVARIAATIOT:
+            # Rakennetaan "(juho OR johan OR johannes)" -tyylinen kysely
+            variaatiot = NIMIVARIAATIOT[alempi]
+            query_str = " OR ".join(variaatiot)
+        else:
+            query_str = hakusana
     else:
-        # AND: kaikki termit pitää löytyä
-        teksti_osa = {
-            "bool": {
-                "must": [tee_match(t) for t in and_termit]
-            }
+        # Pilkulla eroteltu AND-haku: "Mäntylä, Jurva" → Mäntylä AND Jurva
+        termit = [s.strip() for s in hakusana.split(",") if s.strip()]
+        if len(termit) > 1:
+            query_str = " AND ".join(f'"{t}"' if " " in t else t for t in termit)
+        else:
+            query_str = hakusana
+
+    # query_string: joustava, tukee AND/OR/"fraasi", lähimpänä KA:n omaa hakua
+    teksti_osa = {
+        "query_string": {
+            "query": query_str,
+            "fields": [teksti_kentta],
+            "default_operator": "OR",
+            "analyze_wildcard": True,
+            "allow_leading_wildcard": False,
+            "fuzziness": "AUTO",
+            "fuzzy_max_expansions": 50,
+            "minimum_should_match": "75%"
         }
+    }
 
     aikasuodatin = {"range": {vuosi_kentta_alku: {"gte": vuosi_alku, "lte": vuosi_loppu}}}
 
@@ -642,8 +642,8 @@ def main():
 
         hakusana = st.text_input(
             "📝 Hakusanat",
-            placeholder="Esim. Mäntylä, Jurva (AND-haku)",
-            help="Voit kirjoittaa useamman sanan pilkulla eroteltuna. Kaikki sanat täytyy löytyä tekstistä (AND-logiikka)."
+            placeholder="Esim. Mäntylä tai Mäntylä, Jurva (AND)",
+            help="Yksi sana: normaali haku. Pilkulla eroteltuna: kaikki sanat löydyttävä (AND). Voit myös kirjoittaa: Mäntylä AND Jurva tai \"tarkka fraasi\"."
         )
 
         indeksi_nimi = st.selectbox("📚 Aineisto", options=list(INDEKSIT.keys()), index=0)
@@ -766,35 +766,97 @@ def main():
 
     with tab_ohje:
         st.subheader("ℹ️ Käyttöohjeet")
+
+        st.markdown("### 🔍 Hakutyypit")
         st.markdown("""
-        ### API-avaimen hankkiminen
-        Ota yhteyttä Kansallisarkistoon: **sanna.joska@kansallisarkisto.fi**
-
-        ### Aineistot
-        | Aineisto | Sisältö | Aikaväli |
-        |---|---|---|
-        | Tuomiokirjat | Yli 7 milj. käräjäkirjasivua | 1600–1900-luvut |
-        | Voudintilit | Ruotsin vallan verotusaineisto | 1537–1634 |
-        | Diplomatarium Fennicum | Keskiaikaiset asiakirjat | ~1100–1540 |
-
-        ### Automaattiset tägit
-        Jokainen tulos saa automaattisesti tägit:
-        - 📅 Vuosisata
-        - 🏘️ Kunta (tunnistetaan tekstistä, yli 200 kuntaa ml. lakkautetut)
-        - 📍 Maakunta (jos kuntaa ei tunnisteta)
-        - Asiasisältö: ⚖️ Oikeudenkäynti, 💰 Kauppa & velka, 🏠 Perintö & omaisuus jne.
-
-        Pohjanmaa ja Etelä-Pohjanmaa ovat erityisen kattavasti mukana.
-
-        ### Järjestely ja suodatus
-        - **Järjestys:** Osuvin / Vanhin / Uusin ensin
-        - **Aineisto:** Rajaa tiettyyn arkistoaineistokokonaisuuteen
-        - **Hae tuloksista:** Suodattaa ladattuja tuloksia tekstin perusteella
-        - **Tägifiltteri:** Valitse yksi tai useampi tägi
-
-        ### Linkit Astiaan
-        Tuomiokirja-aineiston tuloksissa on suora linkki alkuperäisen asiakirjan tarkasteluun.
+Työkalu tukee useita erilaisia hakutapoja. Kirjoita hakusana sivupalkin kenttään.
         """)
+
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("**Perushaku**")
+            st.code("Mäntylä", language=None)
+            st.caption("Hakee kaikki maininnat sanasta. Löytää myös lähimuodot automaattisesti.")
+
+            st.markdown("**AND-haku pilkulla**")
+            st.code("Mäntylä, Jurva", language=None)
+            st.caption("Molemmat sanat täytyy löytyä samasta asiakirjasta.")
+
+            st.markdown("**Fraasihaku**")
+            st.code('\"Koivumäen talo\"', language=None)
+            st.caption("Sanat täytyy esiintyä tässä järjestyksessä peräkkäin.")
+
+        with col2:
+            st.markdown("**OR-haku**")
+            st.code("Mäntylä OR Männylä", language=None)
+            st.caption("Jompi kumpi sana riittää. Hyödyllinen vanhalle kirjoitusasulle.")
+
+            st.markdown("**Jokerimerkkihaku**")
+            st.code("Mänty*", language=None)
+            st.caption("Löytää kaikki sanat jotka alkavat 'Mänty' – Mäntylä, Mäntymäki jne.")
+
+            st.markdown("**Nimivariaatiot**")
+            st.code("Juho  (+ Nimivariaatiot-checkbox)", language=None)
+            st.caption("Hakee automaattisesti: Juho, Johan, Johannes, Juhana, Juhani.")
+
+        st.divider()
+        st.markdown("### 📚 Aineistot")
+        st.markdown("""
+| Aineisto | Sisältö | Aikaväli | Kieli |
+|---|---|---|---|
+| Tuomiokirjat | Yli 7 milj. käräjäkirjasivua | 1600–1900-luvut | Ruotsi/Suomi |
+| Voudintilit | Ruotsin vallan verotusaineisto | 1537–1634 | Ruotsi |
+| Diplomatarium Fennicum | Keskiaikaiset asiakirjat | ~1100–1540 | Latina/Ruotsi |
+
+⚠️ Huomio: Tuomiokirjat ovat pääosin **ruotsiksi** 1600–1800-luvuilla. Hae ruotsinkielisillä muodoilla:
+- Jurva → Jurva (sama), Ilmajoki → Ilmola, Vaasa → Wasa tai Vasa
+        """)
+
+        st.divider()
+        st.markdown("### 🏷️ Automaattiset tägit")
+        st.markdown("""
+Jokainen tulos saa automaattisesti tägit jotka kertovat nopeasti asiakirjan sisällöstä:
+
+| Tägi | Merkitys |
+|---|---|
+| 📅 1800-luku | Asiakirjan vuosisata |
+| 📍 Närpiön | Paikkakunta aineiston nimestä |
+| 🗺️ Pohjanmaa | Maakunta |
+| ⚖️ Oikeudenkäynti | Asiasisältö tekstin perusteella |
+| 💰 Kauppa & velka | Asiasisältö tekstin perusteella |
+| 🏠 Perintö & omaisuus | Asiasisältö tekstin perusteella |
+| 🌾 Maatalous | Asiasisältö tekstin perusteella |
+| 🔪 Väkivalta | Asiasisältö tekstin perusteella |
+| ⛪ Kirkko & uskonto | Asiasisältö tekstin perusteella |
+
+Tägejä voi käyttää filttereinä – valitse yksi tai useampi "Suodata tägien mukaan" -valikosta.
+        """)
+
+        st.divider()
+        st.markdown("### 🎛️ Järjestely ja suodatus")
+        st.markdown("""
+Haun jälkeen tuloksia voi rajata ilman uutta hakua:
+
+- **Järjestys** – Osuvin ensin (oletusarvo), Vanhin ensin, Uusin ensin
+- **Aineisto** – Rajaa yhteen arkistoaineistokokonaisuuteen
+- **Hae tuloksista** – Kirjoita sana joka täytyy löytyä tekstikatkelmasta
+- **Suodata tägien mukaan** – Valitse yksi tai useampi tägi yhdistelmäsuodatukseen
+        """)
+
+        st.divider()
+        st.markdown("### 💡 Vinkkejä sukututkimukseen")
+        st.markdown("""
+- **Kokeile ruotsinkielisiä muotoja** – vanha aineisto on ruotsiksi. Esim. *Juho Mäntylä* esiintyy usein muodossa *Johan Mäntylä* tai *Johan Månttylä*
+- **Käytä jokerimerkkiä epävarmoissa nimissä** – `Mänty*` löytää kaikki muunnokset
+- **Rajaa aikaväli ensin** – jos tiedät henkilön eläneen n. 1780–1830, rajaa siihen
+- **Nimivariaatiot käyttöön aina henkilönimillä** – historialliset nimet vaihtelivat paljon
+- **Aineistofiltteri** on tehokas – jos tiedät pitäjän, valitse sen tuomiokunnan aineisto suoraan
+- **Astia-linkki** vie alkuperäisen digitoidun asiakirjan äärelle – siellä näet käsinkirjoitetun originaalin
+        """)
+
+        st.divider()
+        st.markdown("### 🔑 API-avain")
+        st.markdown("Ota yhteyttä Kansallisarkistoon: **sanna.joska@kansallisarkisto.fi**")
 
 
 if __name__ == "__main__":
