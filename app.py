@@ -602,7 +602,7 @@ def main():
         <div style="
             width: 100%;
             height: 200px;
-            background-image: url('https://raw.githubusercontent.com/elakala/kansallisarkisto-haku/main/banner.jpg');
+            background-image: url('https://raw.githubusercontent.com/elakala/kansallisarkisto-haku/main/ChatGPT_Image_22_5_2026_klo_18_06_27.png');
             background-size: cover;
             background-position: center 40%;
             border-radius: 8px;
