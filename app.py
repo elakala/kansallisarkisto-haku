@@ -8,7 +8,6 @@ import pandas as pd
 import plotly.express as px
 import requests
 import os
-import re
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -39,8 +38,6 @@ INDEKSIT = {
     "Kaikki aineistot": "tuomiokirjat,voudintilit",
 }
 
-# ── Tägit ──────────────────────────────────────────────────────────────────────
-
 ASIASANAT = {
     "⚖️ Oikeudenkäynti": ["tuomio", "käräjä", "syyte", "vastaaja", "kantaja", "sakko", "rangaistus", "oikeus", "dom", "rätt", "sak", "böter", "straff"],
     "💰 Kauppa & velka": ["kauppa", "velka", "maksu", "myynti", "osto", "handel", "skuld", "betalning", "köp", "sälj", "köpman"],
@@ -60,14 +57,12 @@ ALUEET = {
     "Karjala": ["karjala", "karelien", "viipuri", "vyborg", "sortavala"],
 }
 
-def generoi_tagit(src: dict, indeksi_avain: str) -> list:
-    """Generoi sääntöpohjaiset tägit asiakirjan metatiedoista ja tekstistä."""
+def generoi_tagit(src, indeksi_avain):
     tagit = []
     teksti_kentta = "transcript" if indeksi_avain == "df" else "teksti"
     teksti = (src.get(teksti_kentta, "") or "").lower()
     aineisto = (src.get("aineistokokonaisuus", "") or "").lower()
 
-    # Vuosisatatägi
     try:
         vuosi = int(src.get("alkuvuosi", src.get("dating_start_year", 0)) or 0)
         if vuosi:
@@ -76,29 +71,24 @@ def generoi_tagit(src: dict, indeksi_avain: str) -> list:
     except (TypeError, ValueError):
         pass
 
-    # Aluetägi aineistosta tai tekstistä
     for alue, hakusanat in ALUEET.items():
         if any(s in aineisto or s in teksti for s in hakusanat):
             tagit.append(f"📍 {alue}")
             break
 
-    # Asiasanatägit (max 2)
     loydetyt = []
     for tagi, hakusanat in ASIASANAT.items():
         if any(s in teksti for s in hakusanat):
             loydetyt.append(tagi)
     tagit.extend(loydetyt[:2])
 
-    # DF-spesifi: kielitägi
     if indeksi_avain == "df":
         kieli = src.get("language", "")
         if kieli:
             tagit.append(f"🗣️ {kieli}")
 
-    return tagit[:4]  # max 4 tägiä per tulos
+    return tagit[:4]
 
-
-# ── API & haku ────────────────────────────────────────────────────────────────
 
 def hae_api_avain():
     try:
@@ -134,7 +124,7 @@ def rakenna_kysely(hakusana, vuosi_alku, vuosi_loppu, indeksi, nimivariaatiot):
 
     highlight = {
         "fields": {teksti_kentta: {"fragment_size": 250, "number_of_fragments": 1}},
-        "pre_tags": ["🔍**"],
+        "pre_tags": ["**"],
         "post_tags": ["**"]
     }
 
@@ -175,8 +165,6 @@ def tee_haku(api_avain, indeksi, kysely):
         st.error(f"Virhe: {e}")
     return None
 
-
-# ── Visualisoinnit ────────────────────────────────────────────────────────────
 
 def nayta_kpi_kortit(osumia, data, indeksi_avain, naytettavia):
     vuosi_kentta = "dating_start_year" if indeksi_avain == "df" else "alkuvuosi"
@@ -232,8 +220,6 @@ def nayta_visualisoinnit(resp, indeksi_avain):
         st.plotly_chart(fig2, use_container_width=True)
 
 
-# ── Tulokset ──────────────────────────────────────────────────────────────────
-
 def nayta_tulos(tulos, idx, indeksi_avain):
     src = tulos.get("_source", {})
     highlights = tulos.get("highlight", {})
@@ -249,9 +235,7 @@ def nayta_tulos(tulos, idx, indeksi_avain):
         paikka = src.get("aineistokokonaisuus", "")
         teksti_kentta = "teksti"
 
-    # ── Korttimainen esitys ────────────────────────────────────────────────────
     with st.container():
-        # Yläpalkki: otsikko + vuosi + Astia-linkki
         header_cols = st.columns([6, 1])
         with header_cols[0]:
             otsikko_str = f"**{otsikko}**"
@@ -263,17 +247,13 @@ def nayta_tulos(tulos, idx, indeksi_avain):
             if url:
                 st.markdown(f"[🔗 Astia]({url})")
 
-        # Tägit
         tagit = generoi_tagit(src, indeksi_avain)
         if tagit:
             st.markdown(" &nbsp; ".join([f"`{t}`" for t in tagit]))
 
-        # Tekstikatkelma suoraan näkyvillä
         katkelmat = highlights.get(teksti_kentta, [])
         if katkelmat:
             katkelma = katkelmat[0]
-            # Siisti highlight-merkit pois näytöstä, korvataan boldilla
-            katkelma = katkelma.replace("🔍**", "**").replace("**", "**")
             st.markdown(
                 f"<div style='background:#f8f9fa; border-left:3px solid #cbd5e0; "
                 f"padding:8px 12px; border-radius:4px; font-size:0.88rem; "
@@ -290,7 +270,6 @@ def nayta_tulos(tulos, idx, indeksi_avain):
                     unsafe_allow_html=True
                 )
 
-        # Metatiedot pienellä – expander lisätietoihin
         with st.expander("Lisätiedot", expanded=False):
             mcols = st.columns(2)
             with mcols[0]:
@@ -309,9 +288,10 @@ def nayta_tulos(tulos, idx, indeksi_avain):
         st.divider()
 
 
-def suodata_ja_jarjesta(tulokset, indeksi_avain, jarjestys, aineisto_filtteri, teksti_filtteri):
+def suodata_ja_jarjesta(tulokset, indeksi_avain, jarjestys, valitut_tagit, teksti_filtteri):
     vuosi_kentta = "dating_start_year" if indeksi_avain == "df" else "alkuvuosi"
 
+    # Tekstifiltteri
     if teksti_filtteri:
         teksti_kentta = "transcript" if indeksi_avain == "df" else "teksti"
         tulokset = [
@@ -319,12 +299,14 @@ def suodata_ja_jarjesta(tulokset, indeksi_avain, jarjestys, aineisto_filtteri, t
             if teksti_filtteri.lower() in t["_source"].get(teksti_kentta, "").lower()
         ]
 
-    if aineisto_filtteri and aineisto_filtteri != "Kaikki":
-        tulokset = [
-            t for t in tulokset
-            if t["_source"].get("aineistokokonaisuus", "") == aineisto_filtteri
-        ]
+    # Tägifiltteri – näytä vain tulokset joilla KAIKKI valitut tägit
+    if valitut_tagit:
+        def tulos_sisaltaa_tagit(t):
+            tuloksen_tagit = generoi_tagit(t["_source"], indeksi_avain)
+            return all(tagi in tuloksen_tagit for tagi in valitut_tagit)
+        tulokset = [t for t in tulokset if tulos_sisaltaa_tagit(t)]
 
+    # Järjestely
     def hae_vuosi(t):
         v = t["_source"].get(vuosi_kentta)
         try:
@@ -339,8 +321,6 @@ def suodata_ja_jarjesta(tulokset, indeksi_avain, jarjestys, aineisto_filtteri, t
 
     return tulokset
 
-
-# ── Päänäkymä ─────────────────────────────────────────────────────────────────
 
 def main():
     st.set_page_config(
@@ -361,7 +341,6 @@ def main():
     st.markdown('<p class="sub-header">Sukututkimuksen ja historiallisen aineiston tehotyökalu · Elasticsearch-rajapinta</p>', unsafe_allow_html=True)
     st.divider()
 
-    # ── Sivupalkki ─────────────────────────────────────────────────────────────
     with st.sidebar:
         st.header("🔍 Hakukriteerit")
 
@@ -411,7 +390,6 @@ def main():
         if not api_avain:
             st.caption("API-avain puuttuu.")
 
-    # ── Välilehdet ─────────────────────────────────────────────────────────────
     tab_haku, tab_ohje = st.tabs(["🔍 Hakutulokset", "ℹ️ Ohjeet"])
 
     with tab_haku:
@@ -441,41 +419,46 @@ def main():
             osumia = st.session_state["osumia"]
             tulosten_maara_sessio = st.session_state["tulosten_maara"]
 
-            # Filtterit
-            st.subheader("🎛️ Järjestely ja suodatus")
-            fcol1, fcol2, fcol3 = st.columns(3)
+            # KPI-kortit
+            nayta_kpi_kortit(osumia, tulokset_raw, indeksi_avain_sessio, len(tulokset_raw))
+            st.divider()
+
+            # Visualisoinnit
+            nayta_visualisoinnit(resp, indeksi_avain_sessio)
+            st.divider()
+
+            # ── Filtterit juuri ennen tuloksia ─────────────────────────────────
+            st.subheader("Järjestely ja suodatus")
+            fcol1, fcol2 = st.columns([1, 2])
 
             with fcol1:
                 jarjestys = st.selectbox("Järjestys", ["Osuvin ensin", "Vanhin ensin", "Uusin ensin"])
 
             with fcol2:
-                aineistot = sorted(set(
-                    t["_source"].get("aineistokokonaisuus", "")
-                    for t in tulokset_raw
-                    if t["_source"].get("aineistokokonaisuus")
-                ))
-                if aineistot and indeksi_avain_sessio != "df":
-                    aineisto_filtteri = st.selectbox("Aineistokokonaisuus", ["Kaikki"] + aineistot)
-                else:
-                    aineisto_filtteri = "Kaikki"
-                    st.selectbox("Aineistokokonaisuus", ["Kaikki"], disabled=True)
-
-            with fcol3:
                 teksti_filtteri = st.text_input("Hae tuloksista", placeholder="Rajaa sanalla...",
                                                  help="Suodattaa jo ladattuja tuloksia")
 
-            st.divider()
+            # Kerää kaikki uniikit tägit tuloksista
+            kaikki_tagit = sorted(set(
+                tagi
+                for t in tulokset_raw
+                for tagi in generoi_tagit(t["_source"], indeksi_avain_sessio)
+            ))
 
-            tulokset = suodata_ja_jarjesta(
-                tulokset_raw, indeksi_avain_sessio,
-                jarjestys, aineisto_filtteri, teksti_filtteri
+            valitut_tagit = st.multiselect(
+                "Suodata tägien mukaan",
+                options=kaikki_tagit,
+                placeholder="Valitse yksi tai useampi tägi...",
+                help="Näyttää vain tulokset joilla kaikki valitut tägit esiintyvät"
             )
 
-            nayta_kpi_kortit(osumia, tulokset_raw, indeksi_avain_sessio, len(tulokset))
             st.divider()
 
-            nayta_visualisoinnit(resp, indeksi_avain_sessio)
-            st.divider()
+            # Suodata ja järjestä
+            tulokset = suodata_ja_jarjesta(
+                tulokset_raw, indeksi_avain_sessio,
+                jarjestys, valitut_tagit, teksti_filtteri
+            )
 
             if osumia > tulosten_maara_sessio:
                 st.info(f"💡 Haku löysi {osumia:,} osumaa. Näytetään {tulosten_maara_sessio}, joista suodatuksen jälkeen {len(tulokset)}.")
@@ -505,14 +488,15 @@ def main():
         | Diplomatarium Fennicum | Keskiaikaiset asiakirjat | ~1100–1540 |
 
         ### Automaattiset tägit
-        Jokainen tulos saa automaattisesti tägit jotka kertovat nopeasti asiakirjan sisällöstä:
-        vuosisadan, maantieteellisen alueen ja asiasisällön (oikeudenkäynti, kauppa, perintö jne.)
+        Jokainen tulos saa automaattisesti tägit asiakirjan sisällön perusteella:
+        vuosisata, maantieteellinen alue ja asiasisältö (oikeudenkäynti, kauppa, perintö jne.)
+        Tägejä voi käyttää suoraan filttereinä multiselect-valikosta.
 
         ### Järjestely ja suodatus
-        Haun jälkeen voit järjestellä tuloksia ilman uutta hakua:
+        Kaavioiden jälkeen, juuri ennen tuloksia:
         - **Järjestys:** Osuvin / Vanhin / Uusin ensin
-        - **Aineistokokonaisuus:** Rajaa tiettyyn arkistoaineistoon
         - **Hae tuloksista:** Kirjoita sana joka täytyy löytyä tekstistä
+        - **Suodata tägien mukaan:** Valitse yksi tai useampi tägi
 
         ### Nimivariaatiot
         Esim. *Juho* → Johan, Johannes, Juhana, Juhani.
