@@ -235,6 +235,17 @@ ALUEET = {
 # Muoto: "Näytettävä nimi": [hakusanat tekstistä, min 4 merkkiä]
 # Pohjanmaa ja Etelä-Pohjanmaa erittäin kattavasti
 
+# ── Maakunta → aineistokokonaisuuden avainsanat -hakemisto ────────────────────
+# Käänteinen AINEISTO_MAAKUNTA: maakunta → lista aineistonimiä joiden alkua matchataan
+def hae_maakunnan_aineistot(maakunta):
+    """Palauttaa listan aineistokokonaisuuden nimien alusta jotka kuuluvat maakuntaan."""
+    return [avain for avain, mk in AINEISTO_MAAKUNTA.items() if mk == maakunta]
+
+def hae_kaikki_maakunnat():
+    """Palauttaa uniikit maakunnat aakkosjärjestyksessä."""
+    return sorted(set(AINEISTO_MAAKUNTA.values()))
+
+
 def etsi_paikkakunta_aineistosta(aineistokokonaisuus):
     """Pura paikkakunta ja maakunta aineistokokonaisuuden nimestä."""
     if not aineistokokonaisuus:
@@ -314,7 +325,7 @@ def hae_api_avain():
     return os.environ.get("KA_API_KEY")
 
 
-def rakenna_kysely(hakusana, vuosi_alku, vuosi_loppu, indeksi, nimivariaatiot):
+def rakenna_kysely(hakusana, vuosi_alku, vuosi_loppu, indeksi, nimivariaatiot, maakunta_filtteri=None):
     teksti_kentta = "transcript" if indeksi == "df" else "teksti"
     vuosi_kentta_alku = "dating_start_year" if indeksi == "df" else "alkuvuosi"
 
@@ -368,7 +379,7 @@ def rakenna_kysely(hakusana, vuosi_alku, vuosi_loppu, indeksi, nimivariaatiot):
         }
 
     return {
-        "query": {"bool": {"must": teksti_osa, "filter": aikasuodatin}},
+        "query": {"bool": {"must": teksti_osa, "filter": filters}},
         "highlight": highlight,
         "aggs": aggs,
         "size": 100,
@@ -659,6 +670,17 @@ def main():
         with col2:
             vuosi_loppu = st.number_input("Loppu", min_value=1100, max_value=1980, value=vuosi_maksimi, step=10)
 
+        # Maakuntarajaus
+        st.divider()
+        kaikki_maakunnat = hae_kaikki_maakunnat()
+        maakunta_valinta = st.selectbox(
+            "🗺️ Maakunta (rajaa hakua)",
+            options=["Kaikki"] + kaikki_maakunnat,
+            index=0,
+            help="Rajaa haku tietyn maakunnan tuomiokirja-aineistoihin. Ei toimi Diplomatarium Fennicumilla."
+        )
+        maakunta_filtteri = None if maakunta_valinta == "Kaikki" else maakunta_valinta
+
         st.divider()
         nimivariaatiot = st.checkbox("🔤 Nimivariaatiot",
             help="Hakee automaattisesti historiallisia nimimuotoja (esim. Juho → Johan, Johannes)")
@@ -684,7 +706,7 @@ def main():
     with tab_haku:
         if haku_nappi and hakusana and api_avain:
             with st.spinner(f"Haetaan '{hakusana}'..."):
-                kysely = rakenna_kysely(hakusana, vuosi_alku, vuosi_loppu, indeksi_avain, nimivariaatiot)
+                kysely = rakenna_kysely(hakusana, vuosi_alku, vuosi_loppu, indeksi_avain, nimivariaatiot, maakunta_filtteri)
                 kysely["size"] = tulosten_maara
                 resp = tee_haku(api_avain, indeksi_avain, kysely)
 
