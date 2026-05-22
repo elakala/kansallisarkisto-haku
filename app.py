@@ -432,21 +432,50 @@ def nayta_visualisoinnit(resp, indeksi_avain):
 
     agg_aineistot = resp.get("aggregations", {}).get("aineistot", {}).get("buckets", [])
     if agg_aineistot:
-        df_a = pd.DataFrame([
-            {"Aineisto": b["key"], "Osumia": b["doc_count"]}
-            for b in agg_aineistot
-        ]).sort_values("Osumia", ascending=True)
-        fig2 = px.bar(
-            df_a, x="Osumia", y="Aineisto", orientation="h",
-            title="Osumien jakautuminen aineistokokonaisuuksittain",
-            color="Osumia", color_continuous_scale="Sunset"
-        )
-        fig2.update_layout(
-            plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
-            showlegend=False, coloraxis_showscale=False,
-            height=max(300, len(agg_aineistot) * 35)
-        )
-        st.plotly_chart(fig2, use_container_width=True)
+        # ── Maakuntakaavio ────────────────────────────────────────────────────
+        maakunta_laskuri = {}
+        for b in agg_aineistot:
+            _, maakunta = etsi_paikkakunta_aineistosta(b["key"])
+            if maakunta:
+                maakunta_laskuri[maakunta] = maakunta_laskuri.get(maakunta, 0) + b["doc_count"]
+            else:
+                maakunta_laskuri["Muu/tuntematon"] = maakunta_laskuri.get("Muu/tuntematon", 0) + b["doc_count"]
+
+        if maakunta_laskuri:
+            df_mk = pd.DataFrame([
+                {"Maakunta": mk, "Osumia": n}
+                for mk, n in maakunta_laskuri.items()
+            ]).sort_values("Osumia", ascending=True)
+
+            fig_mk = px.bar(
+                df_mk, x="Osumia", y="Maakunta", orientation="h",
+                title="Osumien jakautuminen maakunnittain",
+                color="Osumia", color_continuous_scale="Teal"
+            )
+            fig_mk.update_layout(
+                plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
+                showlegend=False, coloraxis_showscale=False,
+                height=max(300, len(maakunta_laskuri) * 40)
+            )
+            st.plotly_chart(fig_mk, use_container_width=True)
+
+        # ── Aineistokaavio (expander, ei oletuksena auki) ─────────────────────
+        with st.expander("Näytä jakauma aineistokokonaisuuksittain"):
+            df_a = pd.DataFrame([
+                {"Aineisto": b["key"], "Osumia": b["doc_count"]}
+                for b in agg_aineistot
+            ]).sort_values("Osumia", ascending=True)
+            fig2 = px.bar(
+                df_a, x="Osumia", y="Aineisto", orientation="h",
+                title="Osumien jakautuminen aineistokokonaisuuksittain",
+                color="Osumia", color_continuous_scale="Sunset"
+            )
+            fig2.update_layout(
+                plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
+                showlegend=False, coloraxis_showscale=False,
+                height=max(300, len(agg_aineistot) * 35)
+            )
+            st.plotly_chart(fig2, use_container_width=True)
 
 
 def nayta_tulos(tulos, idx, indeksi_avain):
