@@ -8,11 +8,11 @@ import pandas as pd
 import plotly.express as px
 import requests
 import os
+import re
 from dotenv import load_dotenv
 
 load_dotenv()
 
-# ── Konfiguraatio ──────────────────────────────────────────────────────────────
 ES_URL = "https://es.demo.kansallisarkisto.fi"
 
 NIMIVARIAATIOT = {
@@ -39,7 +39,66 @@ INDEKSIT = {
     "Kaikki aineistot": "tuomiokirjat,voudintilit",
 }
 
-# ── Apufunktiot ────────────────────────────────────────────────────────────────
+# ── Tägit ──────────────────────────────────────────────────────────────────────
+
+ASIASANAT = {
+    "⚖️ Oikeudenkäynti": ["tuomio", "käräjä", "syyte", "vastaaja", "kantaja", "sakko", "rangaistus", "oikeus", "dom", "rätt", "sak", "böter", "straff"],
+    "💰 Kauppa & velka": ["kauppa", "velka", "maksu", "myynti", "osto", "handel", "skuld", "betalning", "köp", "sälj", "köpman"],
+    "🏠 Perintö & omaisuus": ["perintö", "testamentti", "tila", "maa", "omaisuus", "arv", "testamente", "gård", "jord", "egendom", "hemman"],
+    "👤 Henkilö": ["nimeltä", "poika", "tytär", "vaimo", "mies", "leski", "son", "dotter", "hustru", "man", "änka", "enka"],
+    "⛪ Kirkko & uskonto": ["kirkko", "pappi", "seurakunta", "kyrka", "präst", "församling", "noita", "taikuus", "häxeri"],
+    "🔪 Väkivalta": ["tappo", "murha", "haavoitti", "löi", "mord", "dråp", "slagsmål", "sår"],
+    "🌾 Maatalous": ["talo", "torppari", "ratsutila", "pelto", "heinä", "hevonen", "bonde", "torpare", "åker", "häst"],
+}
+
+ALUEET = {
+    "Pohjanmaa": ["pohjanmaa", "österbotten", "vaasa", "vasa", "kokkola", "gamlakarleby", "pietarsaari", "jakobstad", "jurva", "ilmajoki", "lapua", "kauhava"],
+    "Häme": ["häme", "tavastland", "hämeenlinna", "tavastehus", "tampere", "tammerfors"],
+    "Savo": ["savo", "savolax", "kuopio", "mikkeli", "joensuu"],
+    "Varsinais-Suomi": ["varsinais", "åbo", "turku", "raisio", "reso"],
+    "Uusimaa": ["uusimaa", "nyland", "helsinki", "helsingfors", "porvoo", "borgå"],
+    "Karjala": ["karjala", "karelien", "viipuri", "vyborg", "sortavala"],
+}
+
+def generoi_tagit(src: dict, indeksi_avain: str) -> list:
+    """Generoi sääntöpohjaiset tägit asiakirjan metatiedoista ja tekstistä."""
+    tagit = []
+    teksti_kentta = "transcript" if indeksi_avain == "df" else "teksti"
+    teksti = (src.get(teksti_kentta, "") or "").lower()
+    aineisto = (src.get("aineistokokonaisuus", "") or "").lower()
+
+    # Vuosisatatägi
+    try:
+        vuosi = int(src.get("alkuvuosi", src.get("dating_start_year", 0)) or 0)
+        if vuosi:
+            vuosisata = ((vuosi - 1) // 100) + 1
+            tagit.append(f"📅 {vuosisata}00-luku")
+    except (TypeError, ValueError):
+        pass
+
+    # Aluetägi aineistosta tai tekstistä
+    for alue, hakusanat in ALUEET.items():
+        if any(s in aineisto or s in teksti for s in hakusanat):
+            tagit.append(f"📍 {alue}")
+            break
+
+    # Asiasanatägit (max 2)
+    loydetyt = []
+    for tagi, hakusanat in ASIASANAT.items():
+        if any(s in teksti for s in hakusanat):
+            loydetyt.append(tagi)
+    tagit.extend(loydetyt[:2])
+
+    # DF-spesifi: kielitägi
+    if indeksi_avain == "df":
+        kieli = src.get("language", "")
+        if kieli:
+            tagit.append(f"🗣️ {kieli}")
+
+    return tagit[:4]  # max 4 tägiä per tulos
+
+
+# ── API & haku ────────────────────────────────────────────────────────────────
 
 def hae_api_avain():
     try:
@@ -74,8 +133,8 @@ def rakenna_kysely(hakusana, vuosi_alku, vuosi_loppu, indeksi, nimivariaatiot):
     aikasuodatin = {"range": {vuosi_kentta_alku: {"gte": vuosi_alku, "lte": vuosi_loppu}}}
 
     highlight = {
-        "fields": {teksti_kentta: {"fragment_size": 200, "number_of_fragments": 2}},
-        "pre_tags": ["**"],
+        "fields": {teksti_kentta: {"fragment_size": 250, "number_of_fragments": 1}},
+        "pre_tags": ["🔍**"],
         "post_tags": ["**"]
     }
 
@@ -117,6 +176,8 @@ def tee_haku(api_avain, indeksi, kysely):
     return None
 
 
+# ── Visualisoinnit ────────────────────────────────────────────────────────────
+
 def nayta_kpi_kortit(osumia, data, indeksi_avain, naytettavia):
     vuosi_kentta = "dating_start_year" if indeksi_avain == "df" else "alkuvuosi"
     vuodet = []
@@ -126,7 +187,6 @@ def nayta_kpi_kortit(osumia, data, indeksi_avain, naytettavia):
             vuodet.append(int(v))
         except (TypeError, ValueError):
             pass
-
     col1, col2, col3, col4 = st.columns(4)
     col1.metric("Osumia yhteensä", f"{osumia:,}".replace(",", " "))
     col2.metric("Näytetään", naytettavia)
@@ -172,6 +232,8 @@ def nayta_visualisoinnit(resp, indeksi_avain):
         st.plotly_chart(fig2, use_container_width=True)
 
 
+# ── Tulokset ──────────────────────────────────────────────────────────────────
+
 def nayta_tulos(tulos, idx, indeksi_avain):
     src = tulos.get("_source", {})
     highlights = tulos.get("highlight", {})
@@ -187,41 +249,69 @@ def nayta_tulos(tulos, idx, indeksi_avain):
         paikka = src.get("aineistokokonaisuus", "")
         teksti_kentta = "teksti"
 
-    otsikko_str = f"📄 {otsikko} ({vuosi})"
-    if paikka and paikka != otsikko:
-        otsikko_str += f" — {paikka}"
+    # ── Korttimainen esitys ────────────────────────────────────────────────────
+    with st.container():
+        # Yläpalkki: otsikko + vuosi + Astia-linkki
+        header_cols = st.columns([6, 1])
+        with header_cols[0]:
+            otsikko_str = f"**{otsikko}**"
+            if paikka and paikka != otsikko:
+                otsikko_str += f" · {paikka}"
+            st.markdown(otsikko_str)
+        with header_cols[1]:
+            url = src.get("url", "")
+            if url:
+                st.markdown(f"[🔗 Astia]({url})")
 
-    with st.expander(otsikko_str):
+        # Tägit
+        tagit = generoi_tagit(src, indeksi_avain)
+        if tagit:
+            st.markdown(" &nbsp; ".join([f"`{t}`" for t in tagit]))
+
+        # Tekstikatkelma suoraan näkyvillä
         katkelmat = highlights.get(teksti_kentta, [])
         if katkelmat:
-            st.markdown("**Tekstikatkelma:**")
-            for k in katkelmat[:2]:
-                st.markdown(f"> {k}")
+            katkelma = katkelmat[0]
+            # Siisti highlight-merkit pois näytöstä, korvataan boldilla
+            katkelma = katkelma.replace("🔍**", "**").replace("**", "**")
+            st.markdown(
+                f"<div style='background:#f8f9fa; border-left:3px solid #cbd5e0; "
+                f"padding:8px 12px; border-radius:4px; font-size:0.88rem; "
+                f"color:#4a5568; margin:4px 0 2px 0;'>{katkelma}</div>",
+                unsafe_allow_html=True
+            )
         else:
             teksti = src.get(teksti_kentta, "")
             if teksti:
-                st.markdown(f"> {teksti[:400]}{'...' if len(teksti) > 400 else ''}")
+                st.markdown(
+                    f"<div style='background:#f8f9fa; border-left:3px solid #cbd5e0; "
+                    f"padding:8px 12px; border-radius:4px; font-size:0.88rem; "
+                    f"color:#4a5568; margin:4px 0 2px 0;'>{teksti[:300]}{'...' if len(teksti) > 300 else ''}</div>",
+                    unsafe_allow_html=True
+                )
 
-        cols = st.columns([2, 2])
-        with cols[0]:
-            if indeksi_avain != "df":
-                st.caption(f"**Aineisto:** {src.get('aineistokokonaisuus', '–')}")
-                st.caption(f"**Pääsarja:** {src.get('pääsarja', '–')}")
-                st.caption(f"**Arkistoyksikkö:** {src.get('arkistoyksikkö', '–')}")
-            else:
-                st.caption(f"**Antopaikka:** {src.get('issuingplace', '–')} ({src.get('issuingplacecountry', '')})")
-                st.caption(f"**Kieli:** {src.get('language', '–')}")
-        with cols[1]:
-            st.caption(f"**Aikaväli:** {src.get('alkuvuosi', src.get('dating_start_year', '?'))} – {src.get('loppuvuosi', src.get('dating_end_year', '?'))}")
-            url = src.get("url", "")
-            if url:
-                st.markdown(f"[🔗 Avaa Astiassa]({url})")
+        # Metatiedot pienellä – expander lisätietoihin
+        with st.expander("Lisätiedot", expanded=False):
+            mcols = st.columns(2)
+            with mcols[0]:
+                if indeksi_avain != "df":
+                    st.caption(f"**Aineisto:** {src.get('aineistokokonaisuus', '–')}")
+                    st.caption(f"**Pääsarja:** {src.get('pääsarja', '–')}")
+                    st.caption(f"**Arkistoyksikkö:** {src.get('arkistoyksikkö', '–')}")
+                else:
+                    st.caption(f"**Antopaikka:** {src.get('issuingplace', '–')} ({src.get('issuingplacecountry', '')})")
+                    st.caption(f"**Kieli:** {src.get('language', '–')}")
+            with mcols[1]:
+                st.caption(f"**Aikaväli:** {src.get('alkuvuosi', src.get('dating_start_year', '?'))} – {src.get('loppuvuosi', src.get('dating_end_year', '?'))}")
+                if url:
+                    st.markdown(f"[🔗 Avaa Astiassa]({url})")
+
+        st.divider()
 
 
 def suodata_ja_jarjesta(tulokset, indeksi_avain, jarjestys, aineisto_filtteri, teksti_filtteri):
     vuosi_kentta = "dating_start_year" if indeksi_avain == "df" else "alkuvuosi"
 
-    # Tekstifiltteri
     if teksti_filtteri:
         teksti_kentta = "transcript" if indeksi_avain == "df" else "teksti"
         tulokset = [
@@ -229,14 +319,12 @@ def suodata_ja_jarjesta(tulokset, indeksi_avain, jarjestys, aineisto_filtteri, t
             if teksti_filtteri.lower() in t["_source"].get(teksti_kentta, "").lower()
         ]
 
-    # Aineistofiltteri
     if aineisto_filtteri and aineisto_filtteri != "Kaikki":
         tulokset = [
             t for t in tulokset
             if t["_source"].get("aineistokokonaisuus", "") == aineisto_filtteri
         ]
 
-    # Järjestely
     def hae_vuosi(t):
         v = t["_source"].get(vuosi_kentta)
         try:
@@ -248,7 +336,6 @@ def suodata_ja_jarjesta(tulokset, indeksi_avain, jarjestys, aineisto_filtteri, t
         tulokset = sorted(tulokset, key=hae_vuosi)
     elif jarjestys == "Uusin ensin":
         tulokset = sorted(tulokset, key=hae_vuosi, reverse=True)
-    # "Osuvin ensin" = alkuperäinen järjestys, ei muuteta
 
     return tulokset
 
@@ -280,10 +367,8 @@ def main():
 
         api_avain = hae_api_avain()
         if not api_avain:
-            api_avain = st.text_input(
-                "🔑 API-avain", type="password",
-                help="Hae avain: sanna.joska@kansallisarkisto.fi"
-            )
+            api_avain = st.text_input("🔑 API-avain", type="password",
+                                       help="Hae avain: sanna.joska@kansallisarkisto.fi")
             if api_avain:
                 st.success("API-avain asetettu")
         else:
@@ -291,10 +376,7 @@ def main():
 
         st.divider()
 
-        hakusana = st.text_input(
-            "📝 Hakusana",
-            placeholder="Esim. Koivumäki, Jurva, noita..."
-        )
+        hakusana = st.text_input("📝 Hakusana", placeholder="Esim. Koivumäki, Jurva, noita...")
 
         indeksi_nimi = st.selectbox("📚 Aineisto", options=list(INDEKSIT.keys()), index=0)
         indeksi_avain = INDEKSIT[indeksi_nimi]
@@ -310,10 +392,8 @@ def main():
             vuosi_loppu = st.number_input("Loppu", min_value=1100, max_value=1980, value=vuosi_maksimi, step=10)
 
         st.divider()
-        nimivariaatiot = st.checkbox(
-            "🔤 Nimivariaatiot",
-            help="Hakee automaattisesti historiallisia nimimuotoja (esim. Juho → Johan, Johannes, Juhana)"
-        )
+        nimivariaatiot = st.checkbox("🔤 Nimivariaatiot",
+            help="Hakee automaattisesti historiallisia nimimuotoja (esim. Juho → Johan, Johannes)")
         if nimivariaatiot and hakusana:
             alempi = hakusana.lower()
             if alempi in NIMIVARIAATIOT:
@@ -324,10 +404,8 @@ def main():
         st.divider()
         tulosten_maara = st.slider("Tulosten määrä", 10, 100, 50, step=10)
 
-        haku_nappi = st.button(
-            "🔎 Hae", type="primary", use_container_width=True,
-            disabled=not (hakusana and api_avain)
-        )
+        haku_nappi = st.button("🔎 Hae", type="primary", use_container_width=True,
+                                disabled=not (hakusana and api_avain))
         if not hakusana:
             st.caption("Syötä hakusana aloittaaksesi.")
         if not api_avain:
@@ -350,14 +428,12 @@ def main():
                 if osumia == 0:
                     st.warning(f"Ei osumia haulle '{hakusana}' valituilla kriteereillä.")
                 else:
-                    # Tallenna tulokset session stateen filtteröintiä varten
                     st.session_state["tulokset"] = tulokset_raw
                     st.session_state["resp"] = resp
                     st.session_state["indeksi_avain"] = indeksi_avain
                     st.session_state["osumia"] = osumia
                     st.session_state["tulosten_maara"] = tulosten_maara
 
-        # Näytä tulokset jos niitä on sessiossa
         if "tulokset" in st.session_state and st.session_state["tulokset"]:
             tulokset_raw = st.session_state["tulokset"]
             resp = st.session_state["resp"]
@@ -365,60 +441,46 @@ def main():
             osumia = st.session_state["osumia"]
             tulosten_maara_sessio = st.session_state["tulosten_maara"]
 
-            # ── Filtterit tulosalueen yläpuolella ──────────────────────────────
+            # Filtterit
             st.subheader("🎛️ Järjestely ja suodatus")
             fcol1, fcol2, fcol3 = st.columns(3)
 
             with fcol1:
-                jarjestys = st.selectbox(
-                    "Järjestys",
-                    ["Osuvin ensin", "Vanhin ensin", "Uusin ensin"]
-                )
+                jarjestys = st.selectbox("Järjestys", ["Osuvin ensin", "Vanhin ensin", "Uusin ensin"])
 
             with fcol2:
-                # Kerää uniikit aineistokokonaisuudet tuloksista
                 aineistot = sorted(set(
                     t["_source"].get("aineistokokonaisuus", "")
                     for t in tulokset_raw
                     if t["_source"].get("aineistokokonaisuus")
                 ))
                 if aineistot and indeksi_avain_sessio != "df":
-                    aineisto_filtteri = st.selectbox(
-                        "Aineistokokonaisuus",
-                        ["Kaikki"] + aineistot
-                    )
+                    aineisto_filtteri = st.selectbox("Aineistokokonaisuus", ["Kaikki"] + aineistot)
                 else:
                     aineisto_filtteri = "Kaikki"
                     st.selectbox("Aineistokokonaisuus", ["Kaikki"], disabled=True)
 
             with fcol3:
-                teksti_filtteri = st.text_input(
-                    "Hae tuloksista",
-                    placeholder="Rajaa sanalla...",
-                    help="Suodattaa jo ladattuja tuloksia"
-                )
+                teksti_filtteri = st.text_input("Hae tuloksista", placeholder="Rajaa sanalla...",
+                                                 help="Suodattaa jo ladattuja tuloksia")
 
             st.divider()
 
-            # Suodata ja järjestä
             tulokset = suodata_ja_jarjesta(
                 tulokset_raw, indeksi_avain_sessio,
                 jarjestys, aineisto_filtteri, teksti_filtteri
             )
 
-            # KPI-kortit
             nayta_kpi_kortit(osumia, tulokset_raw, indeksi_avain_sessio, len(tulokset))
             st.divider()
 
-            # Visualisoinnit
             nayta_visualisoinnit(resp, indeksi_avain_sessio)
             st.divider()
 
-            # Tuloslista
             if osumia > tulosten_maara_sessio:
                 st.info(f"💡 Haku löysi {osumia:,} osumaa. Näytetään {tulosten_maara_sessio}, joista suodatuksen jälkeen {len(tulokset)}.")
-            else:
-                st.subheader(f"📋 Tulokset ({len(tulokset)} näytetään)")
+
+            st.subheader(f"📋 Tulokset ({len(tulokset)})")
 
             if not tulokset:
                 st.warning("Ei tuloksia nykyisillä suodattimilla.")
@@ -442,19 +504,21 @@ def main():
         | Voudintilit | Ruotsin vallan verotusaineisto | 1537–1634 |
         | Diplomatarium Fennicum | Keskiaikaiset asiakirjat | ~1100–1540 |
 
+        ### Automaattiset tägit
+        Jokainen tulos saa automaattisesti tägit jotka kertovat nopeasti asiakirjan sisällöstä:
+        vuosisadan, maantieteellisen alueen ja asiasisällön (oikeudenkäynti, kauppa, perintö jne.)
+
         ### Järjestely ja suodatus
-        Haun jälkeen voit järjestellä tuloksia kolmella tavalla ilman uutta hakua:
+        Haun jälkeen voit järjestellä tuloksia ilman uutta hakua:
         - **Järjestys:** Osuvin / Vanhin / Uusin ensin
         - **Aineistokokonaisuus:** Rajaa tiettyyn arkistoaineistoon
         - **Hae tuloksista:** Kirjoita sana joka täytyy löytyä tekstistä
 
         ### Nimivariaatiot
-        Historiallisessa aineistossa sama nimi esiintyy usein eri muodoissa.
         Esim. *Juho* → Johan, Johannes, Juhana, Juhani.
 
         ### Linkit Astiaan
-        Tuomiokirja-aineiston tuloksissa on suora linkki Kansallisarkiston
-        Astia-palveluun alkuperäisen asiakirjan tarkasteluun.
+        Tuomiokirja-aineiston tuloksissa on suora linkki alkuperäisen asiakirjan tarkasteluun.
         """)
 
 
