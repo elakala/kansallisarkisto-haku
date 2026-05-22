@@ -593,13 +593,37 @@ def main():
 
     st.markdown("""
         <style>
-        .main-header { font-size: 2rem; font-weight: 700; color: #1a365d; margin-bottom: 0; }
-        .sub-header { color: #4a5568; font-size: 0.95rem; margin-top: 0; }
+
         </style>
     """, unsafe_allow_html=True)
 
-    st.markdown('<p class="main-header">🏛️ Kansallisarkiston Sisältöhaku</p>', unsafe_allow_html=True)
-    st.markdown('<p class="sub-header">Sukututkimuksen ja historiallisen aineiston tehotyökalu · Elasticsearch-rajapinta</p>', unsafe_allow_html=True)
+    # ── Banneri ────────────────────────────────────────────────────────────────
+    st.markdown("""
+        <div style="
+            width: 100%;
+            height: 200px;
+            background-image: url('https://raw.githubusercontent.com/elakala/kansallisarkisto-haku/main/banner.jpg');
+            background-size: cover;
+            background-position: center 40%;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            position: relative;
+            overflow: hidden;
+        ">
+            <div style="
+                position: absolute; inset: 0;
+                background: linear-gradient(to right, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.1) 60%, rgba(0,0,0,0) 100%);
+                border-radius: 8px;
+                display: flex;
+                flex-direction: column;
+                justify-content: flex-end;
+                padding: 24px 32px;
+            ">
+                <p style="margin:0; font-size:1.8rem; font-weight:700; color:#ffffff; text-shadow: 0 1px 4px rgba(0,0,0,0.6);">🏛️ Kansallisarkiston Sisältöhaku</p>
+                <p style="margin:4px 0 0 0; font-size:0.9rem; color:#e2e8f0; text-shadow: 0 1px 3px rgba(0,0,0,0.5);">Sukututkimuksen ja historiallisen aineiston tehotyökalu · Elasticsearch-rajapinta</p>
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
     st.divider()
 
     with st.sidebar:
