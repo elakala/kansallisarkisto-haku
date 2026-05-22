@@ -312,28 +312,41 @@ def rakenna_kysely(hakusana, vuosi_alku, vuosi_loppu, indeksi, nimivariaatiot):
     teksti_kentta = "transcript" if indeksi == "df" else "teksti"
     vuosi_kentta_alku = "dating_start_year" if indeksi == "df" else "alkuvuosi"
 
-    hakusanat = [hakusana]
-    if nimivariaatiot:
-        alempi = hakusana.lower()
-        if alempi in NIMIVARIAATIOT:
-            hakusanat = NIMIVARIAATIOT[alempi]
-        else:
-            hakusanat = [hakusana, f"{hakusana}*"]
+    # Pilkulla eroteltu AND-haku: "Mäntylä, Jurva" -> molemmat pitää löytyä
+    and_termit = [s.strip() for s in hakusana.split(",") if s.strip()]
 
-    if len(hakusanat) == 1:
-        teksti_osa = {"match": {teksti_kentta: hakusanat[0]}}
+    def tee_match(termi):
+        """Yksittäinen match-kysely fuzzinessillä tai nimivariaatioilla."""
+        if nimivariaatiot:
+            alempi = termi.lower()
+            if alempi in NIMIVARIAATIOT:
+                # Nimivariaatiot: should-kysely (OR)
+                return {
+                    "bool": {
+                        "should": [
+                            {"match": {teksti_kentta: {"query": s, "fuzziness": "AUTO"}}}
+                            for s in NIMIVARIAATIOT[alempi]
+                        ],
+                        "minimum_should_match": 1
+                    }
+                }
+        # Yksittäinen termi fuzzinessillä
+        return {"match": {teksti_kentta: {"query": termi, "fuzziness": "AUTO"}}}
+
+    if len(and_termit) == 1:
+        teksti_osa = tee_match(and_termit[0])
     else:
+        # AND: kaikki termit pitää löytyä
         teksti_osa = {
             "bool": {
-                "should": [{"match": {teksti_kentta: s}} for s in hakusanat],
-                "minimum_should_match": 1
+                "must": [tee_match(t) for t in and_termit]
             }
         }
 
     aikasuodatin = {"range": {vuosi_kentta_alku: {"gte": vuosi_alku, "lte": vuosi_loppu}}}
 
     highlight = {
-        "fields": {teksti_kentta: {"fragment_size": 250, "number_of_fragments": 1}},
+        "fields": {teksti_kentta: {"fragment_size": 500, "number_of_fragments": 2}},
         "pre_tags": ["**"],
         "post_tags": ["**"]
     }
@@ -568,7 +581,11 @@ def main():
 
         st.divider()
 
-        hakusana = st.text_input("📝 Hakusana", placeholder="Esim. Koivumäki, Jurva, noita...")
+        hakusana = st.text_input(
+            "📝 Hakusanat",
+            placeholder="Esim. Mäntylä, Jurva (AND-haku)",
+            help="Voit kirjoittaa useamman sanan pilkulla eroteltuna. Kaikki sanat täytyy löytyä tekstistä (AND-logiikka)."
+        )
 
         indeksi_nimi = st.selectbox("📚 Aineisto", options=list(INDEKSIT.keys()), index=0)
         indeksi_avain = INDEKSIT[indeksi_nimi]
@@ -594,7 +611,7 @@ def main():
                 st.info(f"Lisätään jokerimerkki: {hakusana}*")
 
         st.divider()
-        tulosten_maara = st.slider("Tulosten määrä", 10, 100, 50, step=10)
+        tulosten_maara = st.slider("Tulosten määrä", 10, 500, 100, step=10)
 
         haku_nappi = st.button("🔎 Hae", type="primary", use_container_width=True,
                                 disabled=not (hakusana and api_avain))
