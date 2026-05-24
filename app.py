@@ -325,7 +325,7 @@ def hae_api_avain():
     return os.environ.get("KA_API_KEY")
 
 
-def rakenna_kysely(hakusana, vuosi_alku, vuosi_loppu, indeksi, nimivariaatiot, maakunta_filtteri=None):
+def rakenna_kysely(hakusana, vuosi_alku, vuosi_loppu, indeksi, nimivariaatiot, maakunta_filtteri=None, liittyva_hakusana=None, teksti_filtteri_es=None):
     teksti_kentta = "transcript" if indeksi == "df" else "teksti"
     vuosi_kentta_alku = "dating_start_year" if indeksi == "df" else "alkuvuosi"
 
@@ -333,18 +333,16 @@ def rakenna_kysely(hakusana, vuosi_alku, vuosi_loppu, indeksi, nimivariaatiot, m
     if nimivariaatiot:
         alempi = hakusana.strip().lower()
         if alempi in NIMIVARIAATIOT:
-            # Rakennetaan "(juho OR johan OR johannes)" -tyylinen kysely
             variaatiot = NIMIVARIAATIOT[alempi]
-            query_str = " OR ".join(variaatiot)
+            query_str = "(" + " OR ".join(variaatiot) + ")"
         else:
             query_str = hakusana
     else:
-        # Pilkulla eroteltu AND-haku: "Mäntylä, Jurva" → Mäntylä AND Jurva
-        termit = [s.strip() for s in hakusana.split(",") if s.strip()]
-        if len(termit) > 1:
-            query_str = " AND ".join(f'"{t}"' if " " in t else t for t in termit)
-        else:
-            query_str = hakusana
+        query_str = hakusana
+
+    # Liittyvä hakusana: AND-logiikka suoraan kyselyyn
+    if liittyva_hakusana and liittyva_hakusana.strip():
+        query_str = f"({query_str}) AND ({liittyva_hakusana.strip()})"
 
     # query_string: joustava, tukee AND/OR/"fraasi", lähimpänä KA:n omaa hakua
     teksti_osa = {
@@ -353,17 +351,16 @@ def rakenna_kysely(hakusana, vuosi_alku, vuosi_loppu, indeksi, nimivariaatiot, m
             "fields": [teksti_kentta],
             "default_operator": "OR",
             "analyze_wildcard": True,
-            "allow_leading_wildcard": False,
-            "fuzziness": "AUTO",
-            "fuzzy_max_expansions": 50,
-            "minimum_should_match": "75%"
+            "allow_leading_wildcard": False
         }
     }
 
     aikasuodatin = {"range": {vuosi_kentta_alku: {"gte": vuosi_alku, "lte": vuosi_loppu}}}
 
-    # Maakuntasuodatin
+    # Suodattimet ES-tasolla
     filters = [aikasuodatin]
+
+    # Maakuntasuodatin
     if maakunta_filtteri and indeksi != "df":
         aineisto_avaimet = hae_maakunnan_aineistot(maakunta_filtteri)
         if aineisto_avaimet:
@@ -372,6 +369,17 @@ def rakenna_kysely(hakusana, vuosi_alku, vuosi_loppu, indeksi, nimivariaatiot, m
                 for avain in aineisto_avaimet
             ]
             filters.append({"bool": {"should": maakunta_should, "minimum_should_match": 1}})
+
+    # Tekstifiltteri ES-tasolla (kohdistuu koko tietokantaan, ei vain ladattuihin)
+    if teksti_filtteri_es and teksti_filtteri_es.strip():
+        filters.append({
+            "query_string": {
+                "query": teksti_filtteri_es.strip(),
+                "fields": [teksti_kentta],
+                "default_operator": "OR",
+                "analyze_wildcard": True
+            }
+        })
 
     highlight = {
         "fields": {teksti_kentta: {"fragment_size": 500, "number_of_fragments": 2}},
@@ -500,6 +508,44 @@ def nayta_visualisoinnit(resp, indeksi_avain):
             st.plotly_chart(fig2, use_container_width=True)
 
 
+
+def selita_asiakirja_claudella(asiakirja_teksti: str) -> str:
+    """Lähettää asiakirjan tekstin Claudelle selitettäväksi."""
+    import requests as req
+    katkelma = asiakirja_teksti[:3000]  # max 3000 merkkiä
+
+    prompt = f"""Olet sukututkimukseen ja Suomen historiaan erikoistunut asiantuntija.
+Analysoi tämä Kansallisarkiston asiakirjakatkelma ja vastaa suomeksi selkeästi:
+
+1) **Mistä on kyse?** Tiivistä lyhyesti mistä asiakirjassa on kyse (esim. perintöriita, maakauppa, käräjät, velka-asia).
+2) **Henkilöt:** Ketkä henkilöt mainitaan ja mikä on heidän roolinsa (kantaja, vastaaja, todistaja, maanomistaja jne.)?
+3) **Vaikeat termit:** Selitä lyhyesti tekstin vaikeat historialliset, juridiset tai ruotsinkieliset termit ja lyhenteet.
+
+Asiakirja:
+{katkelma}"""
+
+    try:
+        api_avain = hae_api_avain()
+        resp = req.post(
+            "https://api.anthropic.com/v1/messages",
+            headers={
+                "x-api-key": api_avain,
+                "anthropic-version": "2023-06-01",
+                "content-type": "application/json"
+            },
+            json={
+                "model": "claude-sonnet-4-20250514",
+                "max_tokens": 1000,
+                "messages": [{"role": "user", "content": prompt}]
+            },
+            timeout=30
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        return data["content"][0]["text"]
+    except Exception as e:
+        return f"Selitys epäonnistui: {e}"
+
 def nayta_tulos(tulos, idx, indeksi_avain):
     src = tulos.get("_source", {})
     highlights = tulos.get("highlight", {})
@@ -565,18 +611,29 @@ def nayta_tulos(tulos, idx, indeksi_avain):
                 if url:
                     st.markdown(f"[🔗 Avaa Astiassa]({url})")
 
+            st.divider()
+
+            # ── Claude-selitys ────────────────────────────────────────────────
+            selitys_avain = f"selitys_{idx}_{tulos.get('_id', '')}"
+            if st.button("✨ Selitä asiakirja tekoälyllä", key=f"btn_{selitys_avain}"):
+                teksti_kentta_selitys = "transcript" if indeksi_avain == "df" else "teksti"
+                asiakirja_teksti = src.get(teksti_kentta_selitys, "")
+                if asiakirja_teksti:
+                    with st.spinner("Claude analysoi asiakirjaa..."):
+                        selitys = selita_asiakirja_claudella(asiakirja_teksti)
+                        st.session_state[selitys_avain] = selitys
+                else:
+                    st.warning("Asiakirjassa ei ole tekstisisältöä.")
+
+            if selitys_avain in st.session_state:
+                st.markdown("**✨ Tekoälyselitys:**")
+                st.markdown(st.session_state[selitys_avain])
+
         st.divider()
 
 
-def suodata_ja_jarjesta(tulokset, indeksi_avain, jarjestys, aineisto_filtteri, valitut_tagit, teksti_filtteri):
+def suodata_ja_jarjesta(tulokset, indeksi_avain, jarjestys, aineisto_filtteri, valitut_tagit):
     vuosi_kentta = "dating_start_year" if indeksi_avain == "df" else "alkuvuosi"
-
-    if teksti_filtteri:
-        teksti_kentta = "transcript" if indeksi_avain == "df" else "teksti"
-        tulokset = [
-            t for t in tulokset
-            if teksti_filtteri.lower() in t["_source"].get(teksti_kentta, "").lower()
-        ]
 
     if aineisto_filtteri and aineisto_filtteri != "Kaikki":
         tulokset = [
@@ -663,9 +720,14 @@ def main():
         st.divider()
 
         hakusana = st.text_input(
-            "📝 Hakusanat",
-            placeholder="Esim. Mäntylä tai Mäntylä, Jurva (AND)",
-            help="Yksi sana: normaali haku. Pilkulla eroteltuna: kaikki sanat löydyttävä (AND). Voit myös kirjoittaa: Mäntylä AND Jurva tai \"tarkka fraasi\"."
+            "📝 Hakusana",
+            placeholder="Esim. Mäntylä, Koivumäki...",
+            help="Perushaku. Voit käyttää: Mänty* (jokerimerkki), \"tarkka fraasi\" (lainausmerkit), Mäntylä OR Männylä (tai-haku)."
+        )
+        liittyva_hakusana = st.text_input(
+            "🔗 Liittyvä hakusana (valinnainen)",
+            placeholder="Esim. Jurva, lauttamus...",
+            help="Tämän sanan täytyy löytyä samasta asiakirjasta päähakusanan kanssa (AND-logiikka)."
         )
 
         indeksi_nimi = st.selectbox("📚 Aineisto", options=list(INDEKSIT.keys()), index=0)
@@ -703,6 +765,11 @@ def main():
                 st.info(f"Lisätään jokerimerkki: {hakusana}*")
 
         st.divider()
+        teksti_filtteri_es = st.text_input(
+            "🔎 Rajaa tekstillä (ES-taso)",
+            placeholder="Esim. todistaja, lauttamus...",
+            help="Hakee tällä sanalla koko tietokannasta – ei vain ladatuista tuloksista."
+        )
         tulosten_maara = st.slider("Tulosten määrä", 10, 500, 100, step=10)
 
         haku_nappi = st.button("🔎 Hae", type="primary", use_container_width=True,
@@ -717,7 +784,7 @@ def main():
     with tab_haku:
         if haku_nappi and hakusana and api_avain:
             with st.spinner(f"Haetaan '{hakusana}'..."):
-                kysely = rakenna_kysely(hakusana, vuosi_alku, vuosi_loppu, indeksi_avain, nimivariaatiot, maakunta_filtteri)
+                kysely = rakenna_kysely(hakusana, vuosi_alku, vuosi_loppu, indeksi_avain, nimivariaatiot, maakunta_filtteri, liittyva_hakusana, teksti_filtteri_es)
                 kysely["size"] = tulosten_maara
                 resp = tee_haku(api_avain, indeksi_avain, kysely)
 
@@ -780,7 +847,7 @@ def main():
 
             tulokset = suodata_ja_jarjesta(
                 tulokset_raw, indeksi_avain_sessio,
-                jarjestys, aineisto_filtteri, valitut_tagit, teksti_filtteri
+                jarjestys, aineisto_filtteri, valitut_tagit
             )
 
             if osumia > tulosten_maara_sessio:
