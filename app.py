@@ -560,9 +560,11 @@ Asiakirja:
         except (KeyError, IndexError):
             return "⚠️ Gemini ei voinut luoda selitystä (mahdollinen sisältösuodatus tai tyhjä vastaus)."
     except req.exceptions.HTTPError as e:
+        if e.response is not None and e.response.status_code == 429:
+            return "⚠️ Googlen ilmaisraja ylittyi. Odota hetki ja yritä uudelleen."
         if e.response is not None and e.response.status_code == 400:
             return "⚠️ Gemini API-avain virheellinen. Tarkista GEMINI_API_KEY."
-        return f"⚠️ API-virhe: {e}"
+        return f"⚠️ API-virhe: {e.response.status_code if e.response else 'Tuntematon'}"
     except Exception as e:
         return f"⚠️ Selitys epäonnistui: {e}"
 def nayta_tulos(tulos, idx, indeksi_avain):
@@ -634,11 +636,12 @@ def nayta_tulos(tulos, idx, indeksi_avain):
 
             # ── Claude-selitys ────────────────────────────────────────────────
             selitys_avain = f"selitys_{idx}_{tulos.get('_id', '')}"
+            teksti_kentta_selitys = "transcript" if indeksi_avain == "df" else "teksti"
+            asiakirja_teksti = src.get(teksti_kentta_selitys, "")
+
             if st.button("✨ Selitä asiakirja tekoälyllä", key=f"btn_{selitys_avain}"):
-                teksti_kentta_selitys = "transcript" if indeksi_avain == "df" else "teksti"
-                asiakirja_teksti = src.get(teksti_kentta_selitys, "")
                 if asiakirja_teksti:
-                    with st.spinner("Claude analysoi asiakirjaa..."):
+                    with st.spinner("Tekoäly analysoi asiakirjaa..."):
                         selitys = selita_asiakirja_claudella(asiakirja_teksti)
                         st.session_state[selitys_avain] = selitys
                 else:
@@ -646,7 +649,7 @@ def nayta_tulos(tulos, idx, indeksi_avain):
 
             if selitys_avain in st.session_state:
                 st.markdown("**✨ Tekoälyselitys:**")
-                st.markdown(st.session_state[selitys_avain])
+                st.info(st.session_state[selitys_avain])
 
         st.divider()
 
