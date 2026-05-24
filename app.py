@@ -509,10 +509,24 @@ def nayta_visualisoinnit(resp, indeksi_avain):
 
 
 
+def hae_gemini_avain():
+    """Hae Gemini API-avain ympäristömuuttujista tai Streamlit secretseistä."""
+    try:
+        return st.secrets["GEMINI_API_KEY"]
+    except Exception:
+        pass
+    return os.environ.get("GEMINI_API_KEY")
+
+
 def selita_asiakirja_claudella(asiakirja_teksti: str) -> str:
-    """Lähettää asiakirjan tekstin Claudelle selitettäväksi."""
+    """Selittää asiakirjan tekstin Google Gemini Flash -mallilla."""
     import requests as req
-    katkelma = asiakirja_teksti[:3000]  # max 3000 merkkiä
+
+    gemini_avain = hae_gemini_avain()
+    if not gemini_avain:
+        return "⚠️ Gemini API-avain puuttuu. Lisää GEMINI_API_KEY Streamlit Secretsiin."
+
+    katkelma = asiakirja_teksti[:3000]
 
     prompt = f"""Olet sukututkimukseen ja Suomen historiaan erikoistunut asiantuntija.
 Analysoi tämä Kansallisarkiston asiakirjakatkelma ja vastaa suomeksi selkeästi:
@@ -524,28 +538,33 @@ Analysoi tämä Kansallisarkiston asiakirjakatkelma ja vastaa suomeksi selkeäst
 Asiakirja:
 {katkelma}"""
 
+    url = (
+        "https://generativelanguage.googleapis.com/v1beta/models/"
+        f"gemini-1.5-flash:generateContent?key={gemini_avain}"
+    )
+
+    payload = {
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {
+            "maxOutputTokens": 1000,
+            "temperature": 0.2
+        }
+    }
+
     try:
-        api_avain = hae_api_avain()
-        resp = req.post(
-            "https://api.anthropic.com/v1/messages",
-            headers={
-                "x-api-key": api_avain,
-                "anthropic-version": "2023-06-01",
-                "content-type": "application/json"
-            },
-            json={
-                "model": "claude-sonnet-4-20250514",
-                "max_tokens": 1000,
-                "messages": [{"role": "user", "content": prompt}]
-            },
-            timeout=30
-        )
+        resp = req.post(url, json=payload, timeout=30)
         resp.raise_for_status()
         data = resp.json()
-        return data["content"][0]["text"]
+        try:
+            return data["candidates"][0]["content"]["parts"][0]["text"]
+        except (KeyError, IndexError):
+            return "⚠️ Gemini ei voinut luoda selitystä (mahdollinen sisältösuodatus tai tyhjä vastaus)."
+    except req.exceptions.HTTPError as e:
+        if e.response is not None and e.response.status_code == 400:
+            return "⚠️ Gemini API-avain virheellinen. Tarkista GEMINI_API_KEY."
+        return f"⚠️ API-virhe: {e}"
     except Exception as e:
-        return f"Selitys epäonnistui: {e}"
-
+        return f"⚠️ Selitys epäonnistui: {e}"
 def nayta_tulos(tulos, idx, indeksi_avain):
     src = tulos.get("_source", {})
     highlights = tulos.get("highlight", {})
