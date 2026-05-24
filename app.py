@@ -555,10 +555,13 @@ Asiakirja:
         resp = req.post(url, json=payload, timeout=30)
         resp.raise_for_status()
         data = resp.json()
-        try:
-            return data["candidates"][0]["content"]["parts"][0]["text"]
-        except (KeyError, IndexError):
-            return "⚠️ Gemini ei voinut luoda selitystä (mahdollinen sisältösuodatus tai tyhjä vastaus)."
+        candidates = data.get("candidates", [])
+        if candidates:
+            content_block = candidates[0].get("content", {})
+            parts = content_block.get("parts", [])
+            if parts:
+                return parts[0].get("text", "⚠️ Vastausteksti oli tyhjä.")
+        return "⚠️ Gemini palautti tyhjän vastauksen tai sisältö suodatettiin."
     except req.exceptions.HTTPError as e:
         if e.response is not None and e.response.status_code == 429:
             return "⚠️ Googlen ilmaisraja ylittyi. Odota hetki ja yritä uudelleen."
