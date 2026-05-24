@@ -17,7 +17,7 @@ ES_URL = "https://es.demo.kansallisarkisto.fi"
 
 NIMIVARIAATIOT = {
     "juho": ["juho", "johan", "johannes", "juhana", "juhani"],
-    "maria": ["maria", "maaria", "mari", "marja", "margaretaa", "maaret"],
+    "maria": ["maria", "maaria", "mari", "marja", "margareta", "maaret"],
     "anna": ["anna", "anne", "annikki", "annakaisa"],
     "heikki": ["heikki", "henrik", "henrikki", "henric"],
     "matti": ["matti", "matts", "mattias", "matthias"],
@@ -638,6 +638,16 @@ def nayta_tulos(tulos, idx, indeksi_avain):
                     st.markdown(f"[🔗 Avaa Astiassa]({url})")
 
             st.divider()
+
+            # ── Koko teksti ───────────────────────────────────────────────────
+            teksti_kentta_koko = "transcript" if indeksi_avain == "df" else "teksti"
+            koko_teksti = src.get(teksti_kentta_koko, "")
+            if koko_teksti:
+                with st.expander("📜 Näytä koko teksti"):
+                    st.markdown(
+                        f"<div style='font-size:0.85rem; line-height:1.7; color:#4a5568;'>{koko_teksti}</div>",
+                        unsafe_allow_html=True
+                    )
 
             # ── Claude-selitys ────────────────────────────────────────────────
             selitys_avain = f"selitys_{idx}_{tulos.get('_id', '')}"
