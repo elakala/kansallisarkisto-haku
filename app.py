@@ -528,12 +528,15 @@ def selita_asiakirja_claudella(asiakirja_teksti: str) -> str:
 
     katkelma = asiakirja_teksti[:3000]
 
-    prompt = f"""Olet sukututkimukseen ja Suomen historiaan erikoistunut asiantuntija.
-Analysoi tämä Kansallisarkiston asiakirjakatkelma ja vastaa suomeksi selkeästi:
+    prompt = f"""Olet avustaja joka selittää Kansallisarkiston historiallisia asiakirjoja selkeällä suomen kielellä.
 
-1) **Mistä on kyse?** Tiivistä lyhyesti mistä asiakirjassa on kyse (esim. perintöriita, maakauppa, käräjät, velka-asia).
-2) **Henkilöt:** Ketkä henkilöt mainitaan ja mikä on heidän roolinsa (kantaja, vastaaja, todistaja, maanomistaja jne.)?
-3) **Vaikeat termit:** Selitä lyhyesti tekstin vaikeat historialliset, juridiset tai ruotsinkieliset termit ja lyhenteet.
+Vastaa ilman otsikkoa tässä järjestyksessä:
+
+**Mistä on kyse:** Selitä lyhyesti mistä asiakirjassa on kyse. Maksimissaan 2 lausetta, ei juridista ammattikieltä.
+
+**Henkilöt:** Lista henkilöistä ja heidän rooleistaan. Pidä nimet ja roolit yksinkertaisina.
+
+**Historiallinen tausta:** Maksimissaan 2 lausetta siitä mitä Suomessa tapahtui asiakirjan aikana ja miten se liittyy tähän asiakirjaan. Jätä pois jos yhteys on epäselvä.
 
 Asiakirja:
 {katkelma}"""
