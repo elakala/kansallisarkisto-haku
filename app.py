@@ -17,7 +17,7 @@ ES_URL = "https://es.demo.kansallisarkisto.fi"
 
 NIMIVARIAATIOT = {
     "juho": ["juho", "johan", "johannes", "juhana", "juhani"],
-    "maria": ["maria", "maaria", "mari", "marja", "margareta", "maaret"],
+    "maria": ["maria", "maaria", "mari", "marja", "margaretaa", "maaret"],
     "anna": ["anna", "anne", "annikki", "annakaisa"],
     "heikki": ["heikki", "henrik", "henrikki", "henric"],
     "matti": ["matti", "matts", "mattias", "matthias"],
@@ -535,6 +535,8 @@ Vastaa ilman otsikkoa tässä järjestyksessä:
 **Mistä on kyse:** Selitä lyhyesti mistä asiakirjassa on kyse. Maksimissaan 2 lausetta, ei juridista ammattikieltä.
 
 **Henkilöt:** Lista henkilöistä ja heidän rooleistaan. Pidä nimet ja roolit yksinkertaisina.
+
+**Tapahtumapaikka:** Missä asiakirjassa kuvatut tapahtumat sijoittuvat. Maksimissaan 1 lause. Jätä pois jos ei mainita.
 
 **Historiallinen tausta:** Maksimissaan 2 lausetta siitä mitä Suomessa tapahtui asiakirjan aikana ja miten se liittyy tähän asiakirjaan. Jätä pois jos yhteys on epäselvä.
 
