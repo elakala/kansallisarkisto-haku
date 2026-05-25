@@ -241,6 +241,36 @@ def hae_maakunnan_aineistot(maakunta):
     """Palauttaa listan aineistokokonaisuuden nimien alusta jotka kuuluvat maakuntaan."""
     return [avain for avain, mk in AINEISTO_MAAKUNTA.items() if mk == maakunta]
 
+
+# ── Maakunta → täydet aineistonimet (haettu API:sta) ─────────────────────────
+MAAKUNTA_AINEISTOT = {
+    "Etelä-Pohjanmaa": [
+        "Alavuden tuomiokunnan renovoidut tuomiokirjat (HMA)",
+        "Ilmajoen tuomiokunnan renovoidut tuomiokirjat (HMA)",
+        "Etelä-Pohjanmaan tuomiokunnan renovoidut tuomiokirjat",
+        "Ilmajoen tuomiokunnan renovoidut tuomiokirjat",
+        "Alavuden tuomiokunnan renovoidut tuomiokirjat",
+    ],
+    "Pohjanmaa": [
+        "Vaasan hovioikeuden arkisto",
+        "Närpiön tuomiokunnan renovoidut tuomiokirjat (HMA)",
+        "Vaasan raastuvanoikeuden renovoidut tuomiokirjat",
+        "Vaasan raastuvanoikeuden arkisto (VMA)",
+        "Pohjanmaan itäisen tuomiokunnan renovoidut tuomiokirjat",
+        "Pohjanmaan pohjoisen tuomiokunnan renovoidut tuomiokirjat",
+        "Kristiinankaupungin raastuvanoikeuden renovoidut tuomiokirjat",
+        "Kaskisten raastuvanoikeuden renovoidut tuomiokirjat",
+        "Vaasan laamannikunnan renovoidut tuomiokirjat",
+        "Vaasan ja Oulun laamannikunnan renovoidut tuomiokirjat",
+        "Kaskisten raastuvanoikeuden arkisto (VMA)",
+        "Vaasan kämnerinoikeuden renovoidut tuomiokirjat",
+        "Uudenkaarlepyyn tuomiokunnan renovoidut tuomiokirjat",
+        "Närpiön tuomiokunnan renovoidut tuomiokirjat",
+        "Uudenkaarlepyyn raastuvanoikeuden renovoidut tuomiokirjat",
+        "Pohjanmaan tuomiokunnan renovoidut tuomiokirjat",
+    ],
+}
+
 def hae_kaikki_maakunnat():
     """Palauttaa uniikit maakunnat aakkosjärjestyksessä."""
     return sorted(set(AINEISTO_MAAKUNTA.values()))
@@ -325,7 +355,7 @@ def hae_api_avain():
     return os.environ.get("KA_API_KEY")
 
 
-def rakenna_kysely(hakusana, vuosi_alku, vuosi_loppu, indeksi, nimivariaatiot, maakunta_filtteri=None, liittyva_hakusana=None, teksti_filtteri_es=None):
+def rakenna_kysely(hakusana, vuosi_alku, vuosi_loppu, indeksi, nimivariaatiot, maakunta_filtteri=None, liittyva_hakusana=None, teksti_filtteri_es=None, aineisto_tarkka=None):
     teksti_kentta = "transcript" if indeksi == "df" else "teksti"
     vuosi_kentta_alku = "dating_start_year" if indeksi == "df" else "alkuvuosi"
 
@@ -379,6 +409,12 @@ def rakenna_kysely(hakusana, vuosi_alku, vuosi_loppu, indeksi, nimivariaatiot, m
                 "default_operator": "OR",
                 "analyze_wildcard": True
             }
+        })
+
+    # Tarkka aineistokokonaisuusfiltteri
+    if aineisto_tarkka:
+        filters.append({
+            "term": {"aineistokokonaisuus.keyword": aineisto_tarkka}
         })
 
     highlight = {
@@ -791,6 +827,18 @@ def main():
         )
         maakunta_filtteri = None if maakunta_valinta == "Kaikki" else maakunta_valinta
 
+        # Aineistokokonaisuusfiltteri – näkyy vain jos maakunta valittu ja aineistot tiedossa
+        aineisto_tarkka = None
+        if maakunta_filtteri and maakunta_filtteri in MAAKUNTA_AINEISTOT:
+            aineistolista = MAAKUNTA_AINEISTOT[maakunta_filtteri]
+            aineisto_valinta = st.selectbox(
+                "📁 Aineistokokonaisuus",
+                options=["Kaikki"] + aineistolista,
+                index=0,
+                help="Rajaa haku tiettyyn tuomiokunnan aineistoon."
+            )
+            aineisto_tarkka = None if aineisto_valinta == "Kaikki" else aineisto_valinta
+
         st.divider()
         nimivariaatiot = st.checkbox("🔤 Nimivariaatiot",
             help="Hakee automaattisesti historiallisia nimimuotoja (esim. Juho → Johan, Johannes)")
@@ -821,7 +869,7 @@ def main():
     with tab_haku:
         if haku_nappi and hakusana and api_avain:
             with st.spinner(f"Haetaan '{hakusana}'..."):
-                kysely = rakenna_kysely(hakusana, vuosi_alku, vuosi_loppu, indeksi_avain, nimivariaatiot, maakunta_filtteri, liittyva_hakusana, teksti_filtteri_es)
+                kysely = rakenna_kysely(hakusana, vuosi_alku, vuosi_loppu, indeksi_avain, nimivariaatiot, maakunta_filtteri, liittyva_hakusana, teksti_filtteri_es, aineisto_tarkka)
                 kysely["size"] = tulosten_maara
                 resp = tee_haku(api_avain, indeksi_avain, kysely)
 
