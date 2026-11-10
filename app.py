@@ -355,35 +355,133 @@ def hae_api_avain():
     return os.environ.get("KA_API_KEY")
 
 
-def rakenna_kysely(hakusana, vuosi_alku, vuosi_loppu, indeksi, nimivariaatiot, maakunta_filtteri=None, liittyva_hakusana=None, teksti_filtteri_es=None, aineisto_tarkka=None):
+# ── Hakulogiikka ──────────────────────────────────────────────────────────────
+# Tunnistetaan, onko käyttäjä kirjoittanut omaa hakusyntaksia (lainausmerkit,
+# jokerimerkit, AND/OR/NOT, sulkeet). Silloin kysely annetaan sellaisenaan.
+_EDISTYNYT_RE = re.compile(r'["*?~()]|\b(AND|OR|NOT)\b')
+
+
+def on_edistynyt_haku(teksti):
+    return bool(teksti and _EDISTYNYT_RE.search(teksti))
+
+
+def pilko_sanoiksi(teksti):
+    """Pilkkoo hakulauseen sanoiksi. Pilkut ja välimerkit toimivat erottimina."""
+    if not teksti:
+        return []
+    return [s for s in re.split(r"[\s,;]+", teksti.strip()) if s]
+
+
+def sanan_muodot(sana, nimivariaatiot):
+    """Palauttaa sanan ja sen historialliset nimimuodot (jos käytössä)."""
+    alempi = sana.lower()
+    if nimivariaatiot and alempi in NIMIVARIAATIOT:
+        return NIMIVARIAATIOT[alempi]
+    return [sana]
+
+
+def sana_lauseke(sana, kentta, nimivariaatiot, sumea):
+    """Yksi hakusana: osuma mihin tahansa sen muodoista riittää."""
+    lausekkeet = []
+    for muoto in sanan_muodot(sana, nimivariaatiot):
+        match = {"query": muoto}
+        if sumea:
+            # AUTO: 3–5 merkkiä → 1 virhe, yli 5 merkkiä → 2 virhettä.
+            # Ensimmäinen kirjain pidetään kiinni, jotta haku ei leviä liikaa.
+            match.update({"fuzziness": "AUTO", "prefix_length": 1, "max_expansions": 50})
+        lausekkeet.append({"match": {kentta: match}})
+    if len(lausekkeet) == 1:
+        return lausekkeet[0]
+    return {"bool": {"should": lausekkeet, "minimum_should_match": 1}}
+
+
+def tekstihaku_lauseke(teksti, kentta, nimivariaatiot, sumea, laaja):
+    """
+    Rakentaa tekstihaun:
+    - Edistynyt syntaksi → query_string sellaisenaan (oletus AND, laajassa OR)
+    - Tavallinen haku → jokainen sana omana lausekkeenaan (AND tai laajassa OR)
+    """
+    if on_edistynyt_haku(teksti):
+        return {
+            "query_string": {
+                "query": teksti,
+                "fields": [kentta],
+                "default_operator": "OR" if laaja else "AND",
+                "analyze_wildcard": True,
+                "allow_leading_wildcard": False,
+            }
+        }
+
+    sanat = pilko_sanoiksi(teksti)
+    if not sanat:
+        return None
+    lausekkeet = [sana_lauseke(s, kentta, nimivariaatiot, sumea) for s in sanat]
+    if len(lausekkeet) == 1:
+        return lausekkeet[0]
+    if laaja:
+        return {"bool": {"should": lausekkeet, "minimum_should_match": 1}}
+    return {"bool": {"must": lausekkeet}}
+
+
+def laheisyys_boostit(teksti, kentta, nimivariaatiot=False):
+    """
+    Nostaa kärkeen asiakirjat, joissa sanat ovat peräkkäin tai lähekkäin.
+    Ei rajaa tuloksia, vaikuttaa vain järjestykseen.
+    Nimivariaatioiden kanssa painotetaan myös esim. "Johan Mäntylä".
+    """
+    if on_edistynyt_haku(teksti):
+        return []
+    sanat = pilko_sanoiksi(teksti)
+    if len(sanat) < 2:
+        return []
+    from itertools import islice, product
+    muodot = [sanan_muodot(s, nimivariaatiot) for s in sanat]
+    lauseet = [" ".join(yhd) for yhd in islice(product(*muodot), 12)]  # enintään 12 yhdistelmää
+    boostit = []
+    for lause in lauseet:
+        boostit.append({"match_phrase": {kentta: {"query": lause, "boost": 5}}})             # täsmälleen peräkkäin
+        boostit.append({"match_phrase": {kentta: {"query": lause, "slop": 5, "boost": 2}}})  # enintään ~5 sanan päässä
+    return boostit
+
+
+def kuvaa_haku(hakusana, liittyva_hakusana, nimivariaatiot, sumea, laaja):
+    """Selkokielinen kuvaus siitä, mitä haku tekee (näytetään sivupalkissa)."""
+    if not hakusana:
+        return ""
+    if on_edistynyt_haku(hakusana):
+        rivit = [f"Oma hakusyntaksi: `{hakusana}`"]
+    else:
+        osat = []
+        for s in pilko_sanoiksi(hakusana):
+            muodot = sanan_muodot(s, nimivariaatiot)
+            osat.append("(" + " / ".join(muodot) + ")" if len(muodot) > 1 else s)
+        liitos = " TAI " if laaja else " JA "
+        rivit = [liitos.join(osat)]
+    if liittyva_hakusana and liittyva_hakusana.strip():
+        rivit.append(f"JA lisäksi: {liittyva_hakusana.strip()}")
+    if sumea:
+        rivit.append("Sallii pienet kirjoitusvirheet")
+    return "  \n".join(rivit)
+
+
+def rakenna_kysely(hakusana, vuosi_alku, vuosi_loppu, indeksi, nimivariaatiot, maakunta_filtteri=None, liittyva_hakusana=None, teksti_filtteri_es=None, aineisto_tarkka=None, sumea=False, laaja=False):
     teksti_kentta = "transcript" if indeksi == "df" else "teksti"
     vuosi_kentta_alku = "dating_start_year" if indeksi == "df" else "alkuvuosi"
 
-    # Nimivariaatiot: laajennetaan hakua OR-logiikalla
-    if nimivariaatiot:
-        alempi = hakusana.strip().lower()
-        if alempi in NIMIVARIAATIOT:
-            variaatiot = NIMIVARIAATIOT[alempi]
-            query_str = "(" + " OR ".join(variaatiot) + ")"
-        else:
-            query_str = hakusana
-    else:
-        query_str = hakusana
+    # Päähaku: oletuksena kaikkien sanojen täytyy löytyä (AND)
+    must = []
+    paa = tekstihaku_lauseke(hakusana, teksti_kentta, nimivariaatiot, sumea, laaja)
+    if paa:
+        must.append(paa)
 
-    # Liittyvä hakusana: AND-logiikka suoraan kyselyyn
+    # Liittyvä hakusana: aina pakollinen (AND päähaun kanssa)
     if liittyva_hakusana and liittyva_hakusana.strip():
-        query_str = f"({query_str}) AND ({liittyva_hakusana.strip()})"
+        liit = tekstihaku_lauseke(liittyva_hakusana, teksti_kentta, nimivariaatiot, sumea, laaja=False)
+        if liit:
+            must.append(liit)
 
-    # query_string: joustava, tukee AND/OR/"fraasi", lähimpänä KA:n omaa hakua
-    teksti_osa = {
-        "query_string": {
-            "query": query_str,
-            "fields": [teksti_kentta],
-            "default_operator": "OR",
-            "analyze_wildcard": True,
-            "allow_leading_wildcard": False
-        }
-    }
+    # Läheisyys nostaa osuvimmat kärkeen
+    should = laheisyys_boostit(hakusana, teksti_kentta, nimivariaatiot)
 
     aikasuodatin = {"range": {vuosi_kentta_alku: {"gte": vuosi_alku, "lte": vuosi_loppu}}}
 
@@ -433,10 +531,15 @@ def rakenna_kysely(hakusana, vuosi_alku, vuosi_loppu, indeksi, nimivariaatiot, m
             "terms": {"field": "aineistokokonaisuus.keyword", "size": 50}
         }
 
+    bool_kysely = {"must": must, "filter": filters}
+    if should:
+        bool_kysely["should"] = should
+
     return {
-        "query": {"bool": {"must": [teksti_osa], "filter": filters}},
+        "query": {"bool": bool_kysely},
         "highlight": highlight,
         "aggs": aggs,
+        "track_total_hits": True,
         "size": 100,
         "from": 0
     }
@@ -841,13 +944,16 @@ def main():
 
         st.divider()
         nimivariaatiot = st.checkbox("🔤 Nimivariaatiot",
-            help="Hakee automaattisesti historiallisia nimimuotoja (esim. Juho → Johan, Johannes)")
-        if nimivariaatiot and hakusana:
-            alempi = hakusana.lower()
-            if alempi in NIMIVARIAATIOT:
-                st.info(f"Hakee: {', '.join(NIMIVARIAATIOT[alempi])}")
-            else:
-                st.info(f"Lisätään jokerimerkki: {hakusana}*")
+            help="Hakee jokaiselle etunimelle historialliset muodot (esim. Juho → Johan, Johannes).")
+        sumea = st.checkbox("✏️ Salli kirjoitusvirheet",
+            help="Löytää myös pienet poikkeamat, esim. Mäntylä → Mäntyla, Mentylä. "
+                 "Hyödyllinen, koska tuomiokirjojen teksti on koneellisesti tunnistettua käsialaa. "
+                 "Lisää osumia, mutta myös turhia osumia.")
+        laaja = st.checkbox("🌐 Laaja haku (riittää että yksi sana löytyy)",
+            help="Oletuksena kaikkien hakusanojen täytyy löytyä samasta asiakirjasta. "
+                 "Laajassa haussa yksikin sana riittää.")
+        if hakusana:
+            st.info(kuvaa_haku(hakusana, liittyva_hakusana, nimivariaatiot, sumea, laaja))
 
         st.divider()
         teksti_filtteri_es = st.text_input(
@@ -869,7 +975,7 @@ def main():
     with tab_haku:
         if haku_nappi and hakusana and api_avain:
             with st.spinner(f"Haetaan '{hakusana}'..."):
-                kysely = rakenna_kysely(hakusana, vuosi_alku, vuosi_loppu, indeksi_avain, nimivariaatiot, maakunta_filtteri, liittyva_hakusana, teksti_filtteri_es, aineisto_tarkka)
+                kysely = rakenna_kysely(hakusana, vuosi_alku, vuosi_loppu, indeksi_avain, nimivariaatiot, maakunta_filtteri, liittyva_hakusana, teksti_filtteri_es, aineisto_tarkka, sumea=sumea, laaja=laaja)
                 kysely["size"] = tulosten_maara
                 resp = tee_haku(api_avain, indeksi_avain, kysely)
 
@@ -884,6 +990,7 @@ def main():
                     st.session_state["indeksi_avain"] = indeksi_avain
                     st.session_state["osumia"] = osumia
                     st.session_state["tulosten_maara"] = tulosten_maara
+                st.session_state["viimeisin_kysely"] = kysely
 
         if "tulokset" in st.session_state and st.session_state["tulokset"]:
             tulokset_raw = st.session_state["tulokset"]
@@ -893,6 +1000,9 @@ def main():
             tulosten_maara_sessio = st.session_state["tulosten_maara"]
 
             nayta_kpi_kortit(osumia, tulokset_raw, indeksi_avain_sessio, len(tulokset_raw))
+            if "viimeisin_kysely" in st.session_state:
+                with st.expander("🛠️ Näytä lähetetty kysely (vianetsintä)"):
+                    st.json(st.session_state["viimeisin_kysely"])
             st.divider()
             nayta_visualisoinnit(resp, indeksi_avain_sessio)
             st.divider()
@@ -961,11 +1071,11 @@ Työkalu tukee useita erilaisia hakutapoja. Kirjoita hakusana sivupalkin kenttä
         with col1:
             st.markdown("**Perushaku**")
             st.code("Mäntylä", language=None)
-            st.caption("Hakee kaikki maininnat sanasta. Löytää myös lähimuodot automaattisesti.")
+            st.caption("Hakee kaikki maininnat sanasta.")
 
-            st.markdown("**AND-haku pilkulla**")
-            st.code("Mäntylä, Jurva", language=None)
-            st.caption("Molemmat sanat täytyy löytyä samasta asiakirjasta.")
+            st.markdown("**Usean sanan haku**")
+            st.code("Juho Mäntylä Jurva", language=None)
+            st.caption("Kaikkien sanojen täytyy löytyä samasta asiakirjasta. Asiakirjat, joissa sanat ovat lähekkäin, nousevat kärkeen. Laaja haku -valinnalla yksikin sana riittää.")
 
             st.markdown("**Fraasihaku**")
             st.code('\"Koivumäen talo\"', language=None)
@@ -982,7 +1092,11 @@ Työkalu tukee useita erilaisia hakutapoja. Kirjoita hakusana sivupalkin kenttä
 
             st.markdown("**Nimivariaatiot**")
             st.code("Juho  (+ Nimivariaatiot-checkbox)", language=None)
-            st.caption("Hakee automaattisesti: Juho, Johan, Johannes, Juhana, Juhani.")
+            st.caption("Hakee automaattisesti: Juho, Johan, Johannes, Juhana, Juhani. Toimii myös usean sanan haussa, esim. Juho Mäntylä.")
+
+            st.markdown("**Salli kirjoitusvirheet**")
+            st.code("Mäntylä  (+ Salli kirjoitusvirheet)", language=None)
+            st.caption("Löytää myös Mäntyla, Mentylä jne. Ensimmäinen kirjain pidetään samana. Isommat kirjoitusasun muutokset kannattaa hakea jokerimerkillä tai OR-haulla.")
 
         st.divider()
         st.markdown("### 📚 Aineistot")
