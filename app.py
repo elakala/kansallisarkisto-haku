@@ -36,8 +36,29 @@ INDEKSIT = {
     "Tuomiokirjat (1600–1900-luvut)": "tuomiokirjat",
     "Voudintilit (1537–1634)": "voudintilit",
     "Diplomatarium Fennicum (Keskiaika)": "df",
-    "Kaikki aineistot": "tuomiokirjat,voudintilit",
+    "Kaikki aineistot": "tuomiokirjat,voudintilit,df",
 }
+
+
+def on_yhdistelma(indeksi):
+    """Onko kyseessä usean aineiston yhdistelmähaku (esim. Kaikki aineistot)."""
+    return "," in (indeksi or "")
+
+
+def tuloksen_indeksi(src, indeksi_avain):
+    """Päättelee yksittäisen tuloksen aineiston. Yhdistelmähaussa DF tunnistetaan sen kentistä."""
+    if not on_yhdistelma(indeksi_avain):
+        return indeksi_avain
+    return "df" if ("transcript" in src or "dating_start_year" in src) else "tuomiokirjat"
+
+
+def teksti_kentat(indeksi):
+    """Tekstikentät, joista haetaan. DF:ssä teksti on kentässä 'transcript'."""
+    if indeksi == "df":
+        return ["transcript"]
+    if on_yhdistelma(indeksi) and "df" in indeksi.split(","):
+        return ["teksti", "transcript"]
+    return ["teksti"]
 
 ASIASANAT = {
     "⚖️ Oikeudenkäynti": ["tuomio", "käräjä", "syyte", "vastaaja", "kantaja", "sakko", "rangaistus", "oikeus", "dom", "rätt", "sak", "böter", "straff"],
@@ -305,6 +326,7 @@ def etsi_paikkakunta_aineistosta(aineistokokonaisuus):
     return paikkakunta if len(paikkakunta) > 2 else None, maakunta
 
 def generoi_tagit(src, indeksi_avain):
+    indeksi_avain = tuloksen_indeksi(src, indeksi_avain)
     tagit = []
     teksti_kentta = "transcript" if indeksi_avain == "df" else "teksti"
     teksti = (src.get(teksti_kentta, "") or "").lower()
@@ -380,22 +402,22 @@ def sanan_muodot(sana, nimivariaatiot):
     return [sana]
 
 
-def sana_lauseke(sana, kentta, nimivariaatiot, sumea):
+def sana_lauseke(sana, kentat, nimivariaatiot, sumea):
     """Yksi hakusana: osuma mihin tahansa sen muodoista riittää."""
     lausekkeet = []
     for muoto in sanan_muodot(sana, nimivariaatiot):
-        match = {"query": muoto}
+        match = {"query": muoto, "fields": kentat}
         if sumea:
             # AUTO: 3–5 merkkiä → 1 virhe, yli 5 merkkiä → 2 virhettä.
             # Ensimmäinen kirjain pidetään kiinni, jotta haku ei leviä liikaa.
             match.update({"fuzziness": "AUTO", "prefix_length": 1, "max_expansions": 50})
-        lausekkeet.append({"match": {kentta: match}})
+        lausekkeet.append({"multi_match": match})
     if len(lausekkeet) == 1:
         return lausekkeet[0]
     return {"bool": {"should": lausekkeet, "minimum_should_match": 1}}
 
 
-def tekstihaku_lauseke(teksti, kentta, nimivariaatiot, sumea, laaja):
+def tekstihaku_lauseke(teksti, kentat, nimivariaatiot, sumea, laaja):
     """
     Rakentaa tekstihaun:
     - Edistynyt syntaksi → query_string sellaisenaan (oletus AND, laajassa OR)
@@ -405,7 +427,7 @@ def tekstihaku_lauseke(teksti, kentta, nimivariaatiot, sumea, laaja):
         return {
             "query_string": {
                 "query": teksti,
-                "fields": [kentta],
+                "fields": kentat,
                 "default_operator": "OR" if laaja else "AND",
                 "analyze_wildcard": True,
                 "allow_leading_wildcard": False,
@@ -415,7 +437,7 @@ def tekstihaku_lauseke(teksti, kentta, nimivariaatiot, sumea, laaja):
     sanat = pilko_sanoiksi(teksti)
     if not sanat:
         return None
-    lausekkeet = [sana_lauseke(s, kentta, nimivariaatiot, sumea) for s in sanat]
+    lausekkeet = [sana_lauseke(s, kentat, nimivariaatiot, sumea) for s in sanat]
     if len(lausekkeet) == 1:
         return lausekkeet[0]
     if laaja:
@@ -423,7 +445,7 @@ def tekstihaku_lauseke(teksti, kentta, nimivariaatiot, sumea, laaja):
     return {"bool": {"must": lausekkeet}}
 
 
-def laheisyys_boostit(teksti, kentta, nimivariaatiot=False):
+def laheisyys_boostit(teksti, kentat, nimivariaatiot=False):
     """
     Nostaa kärkeen asiakirjat, joissa sanat ovat peräkkäin tai lähekkäin.
     Ei rajaa tuloksia, vaikuttaa vain järjestykseen.
@@ -439,8 +461,8 @@ def laheisyys_boostit(teksti, kentta, nimivariaatiot=False):
     lauseet = [" ".join(yhd) for yhd in islice(product(*muodot), 12)]  # enintään 12 yhdistelmää
     boostit = []
     for lause in lauseet:
-        boostit.append({"match_phrase": {kentta: {"query": lause, "boost": 5}}})             # täsmälleen peräkkäin
-        boostit.append({"match_phrase": {kentta: {"query": lause, "slop": 5, "boost": 2}}})  # enintään ~5 sanan päässä
+        boostit.append({"multi_match": {"query": lause, "fields": kentat, "type": "phrase", "boost": 5}})             # täsmälleen peräkkäin
+        boostit.append({"multi_match": {"query": lause, "fields": kentat, "type": "phrase", "slop": 5, "boost": 2}})  # enintään ~5 sanan päässä
     return boostit
 
 
@@ -465,30 +487,38 @@ def kuvaa_haku(hakusana, liittyva_hakusana, nimivariaatiot, sumea, laaja):
 
 
 def rakenna_kysely(hakusana, vuosi_alku, vuosi_loppu, indeksi, nimivariaatiot, maakunta_filtteri=None, liittyva_hakusana=None, teksti_filtteri_es=None, aineisto_tarkka=None, sumea=False, laaja=False):
-    teksti_kentta = "transcript" if indeksi == "df" else "teksti"
+    kentat = teksti_kentat(indeksi)
+    yhdistelma = on_yhdistelma(indeksi)
     vuosi_kentta_alku = "dating_start_year" if indeksi == "df" else "alkuvuosi"
 
     # Päähaku: oletuksena kaikkien sanojen täytyy löytyä (AND)
     must = []
-    paa = tekstihaku_lauseke(hakusana, teksti_kentta, nimivariaatiot, sumea, laaja)
+    paa = tekstihaku_lauseke(hakusana, kentat, nimivariaatiot, sumea, laaja)
     if paa:
         must.append(paa)
 
     # Liittyvä hakusana: aina pakollinen (AND päähaun kanssa)
     if liittyva_hakusana and liittyva_hakusana.strip():
-        liit = tekstihaku_lauseke(liittyva_hakusana, teksti_kentta, nimivariaatiot, sumea, laaja=False)
+        liit = tekstihaku_lauseke(liittyva_hakusana, kentat, nimivariaatiot, sumea, laaja=False)
         if liit:
             must.append(liit)
 
     # Läheisyys nostaa osuvimmat kärkeen
-    should = laheisyys_boostit(hakusana, teksti_kentta, nimivariaatiot)
+    should = laheisyys_boostit(hakusana, kentat, nimivariaatiot)
 
-    aikasuodatin = {"range": {vuosi_kentta_alku: {"gte": vuosi_alku, "lte": vuosi_loppu}}}
+    if yhdistelma:
+        # Aineistoilla on eri vuosikentät: kelpuutetaan kumpi tahansa
+        aikasuodatin = {"bool": {"should": [
+            {"range": {"alkuvuosi": {"gte": vuosi_alku, "lte": vuosi_loppu}}},
+            {"range": {"dating_start_year": {"gte": vuosi_alku, "lte": vuosi_loppu}}},
+        ], "minimum_should_match": 1}}
+    else:
+        aikasuodatin = {"range": {vuosi_kentta_alku: {"gte": vuosi_alku, "lte": vuosi_loppu}}}
 
     # Suodattimet ES-tasolla
     filters = [aikasuodatin]
 
-    # Maakuntasuodatin
+    # Maakuntasuodatin (rajaa pois DF:n, jolla ei ole maakuntatietoa)
     if maakunta_filtteri and indeksi != "df":
         aineisto_avaimet = hae_maakunnan_aineistot(maakunta_filtteri)
         if aineisto_avaimet:
@@ -503,7 +533,7 @@ def rakenna_kysely(hakusana, vuosi_alku, vuosi_loppu, indeksi, nimivariaatiot, m
         filters.append({
             "query_string": {
                 "query": teksti_filtteri_es.strip(),
-                "fields": [teksti_kentta],
+                "fields": kentat,
                 "default_operator": "OR",
                 "analyze_wildcard": True
             }
@@ -516,7 +546,7 @@ def rakenna_kysely(hakusana, vuosi_alku, vuosi_loppu, indeksi, nimivariaatiot, m
         })
 
     highlight = {
-        "fields": {teksti_kentta: {"fragment_size": 500, "number_of_fragments": 2}},
+        "fields": {k: {"fragment_size": 500, "number_of_fragments": 2} for k in kentat},
         "pre_tags": ["**"],
         "post_tags": ["**"]
     }
@@ -526,6 +556,10 @@ def rakenna_kysely(hakusana, vuosi_alku, vuosi_loppu, indeksi, nimivariaatiot, m
             "histogram": {"field": vuosi_kentta_alku, "interval": 10, "min_doc_count": 1}
         }
     }
+    if yhdistelma and "df" in indeksi.split(","):
+        aggs["vuosittain_df"] = {
+            "histogram": {"field": "dating_start_year", "interval": 10, "min_doc_count": 1}
+        }
     if indeksi != "df":
         aggs["aineistot"] = {
             "terms": {"field": "aineistokokonaisuus.keyword", "size": 50}
@@ -545,30 +579,43 @@ def rakenna_kysely(hakusana, vuosi_alku, vuosi_loppu, indeksi, nimivariaatiot, m
     }
 
 
-def tee_haku(api_avain, indeksi, kysely):
-    url = f"{ES_URL}/{indeksi}/_search?pretty"
+@st.cache_data(ttl=3600, show_spinner=False, max_entries=200)
+def _hae_es(api_avain, indeksi, kysely_json):
+    """Varsinainen rajapintakutsu. Sama haku palautetaan tunnin ajan välimuistista.
+    Vain onnistuneet haut tallentuvat, koska virhe keskeyttää funktion."""
+    url = f"{ES_URL}/{indeksi}/_search"
     headers = {"Authorization": f"ApiKey {api_avain}", "Content-Type": "application/json"}
+    resp = requests.post(url, headers=headers, data=kysely_json.encode("utf-8"), timeout=20)
+    resp.raise_for_status()
+    return resp.json()
+
+
+def tee_haku(api_avain, indeksi, kysely):
+    import json
+    kysely_json = json.dumps(kysely, ensure_ascii=False, sort_keys=True)
     try:
-        resp = requests.post(url, headers=headers, json=kysely, timeout=15)
-        resp.raise_for_status()
-        return resp.json()
+        return _hae_es(api_avain, indeksi, kysely_json)
     except requests.exceptions.ConnectionError:
         st.error("Yhteys Kansallisarkiston palvelimeen epäonnistui.")
-    except requests.exceptions.HTTPError:
-        if resp.status_code == 401:
+    except requests.exceptions.Timeout:
+        st.error("Haku kesti liian kauan. Kokeile rajata hakua (aikaväli, maakunta).")
+    except requests.exceptions.HTTPError as e:
+        koodi = e.response.status_code if e.response is not None else "?"
+        if koodi == 401:
             st.error("API-avain virheellinen tai puuttuu.")
+        elif koodi == 403:
+            st.error("Ei käyttöoikeutta tähän aineistoon. Kokeile valita aineisto erikseen.")
         else:
-            st.error(f"API-virhe {resp.status_code}")
+            st.error(f"API-virhe {koodi}")
     except Exception as e:
-        st.error(f"Virhe: {e}")
+        st.error(f"Virhe: {type(e).__name__}")
     return None
 
 
 def nayta_kpi_kortit(osumia, data, indeksi_avain, naytettavia):
-    vuosi_kentta = "dating_start_year" if indeksi_avain == "df" else "alkuvuosi"
     vuodet = []
     for h in data:
-        v = h["_source"].get(vuosi_kentta)
+        v = h["_source"].get("alkuvuosi", h["_source"].get("dating_start_year"))
         try:
             vuodet.append(int(v))
         except (TypeError, ValueError):
@@ -581,11 +628,15 @@ def nayta_kpi_kortit(osumia, data, indeksi_avain, naytettavia):
 
 
 def nayta_visualisoinnit(resp, indeksi_avain):
-    agg_vuodet = resp.get("aggregations", {}).get("vuosittain", {}).get("buckets", [])
-    if agg_vuodet:
+    aggregaatit = resp.get("aggregations", {})
+    vuosikymmenet = {}
+    for nimi in ("vuosittain", "vuosittain_df"):  # yhdistelmähaussa kaksi vuosikenttää
+        for b in aggregaatit.get(nimi, {}).get("buckets", []):
+            if b["doc_count"] > 0:
+                vuosikymmenet[b["key"]] = vuosikymmenet.get(b["key"], 0) + b["doc_count"]
+    if vuosikymmenet:
         df_aika = pd.DataFrame([
-            {"Vuosikymmen": b["key"], "Osumia": b["doc_count"]}
-            for b in agg_vuodet if b["doc_count"] > 0
+            {"Vuosikymmen": k, "Osumia": n} for k, n in sorted(vuosikymmenet.items())
         ])
         if not df_aika.empty:
             fig = px.bar(
@@ -657,7 +708,7 @@ def hae_gemini_avain():
     return os.environ.get("GEMINI_API_KEY")
 
 
-def selita_asiakirja_claudella(asiakirja_teksti: str) -> str:
+def selita_asiakirja_geminilla(asiakirja_teksti: str) -> str:
     """Selittää asiakirjan tekstin Google Gemini Flash -mallilla."""
     import requests as req
 
@@ -682,7 +733,9 @@ Vastaa ilman otsikkoa tässä järjestyksessä:
 Asiakirja:
 {katkelma}"""
 
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key={gemini_avain}"
+    # Avain lähetetään otsakkeessa eikä URL:ssa, jotta se ei päädy lokeihin tai virheilmoituksiin
+    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent"
+    otsakkeet = {"x-goog-api-key": gemini_avain, "Content-Type": "application/json"}
 
     payload = {
         "contents": [{"parts": [{"text": prompt}]}],
@@ -693,7 +746,7 @@ Asiakirja:
     }
 
     try:
-        resp = req.post(url, json=payload, timeout=30)
+        resp = req.post(url, headers=otsakkeet, json=payload, timeout=30)
         resp.raise_for_status()
         data = resp.json()
         candidates = data.get("candidates", [])
@@ -710,10 +763,11 @@ Asiakirja:
             return "⚠️ Gemini API-avain virheellinen. Tarkista GEMINI_API_KEY."
         return f"⚠️ API-virhe: {e.response.status_code if e.response else 'Tuntematon'}"
     except Exception as e:
-        return f"⚠️ Selitys epäonnistui: {e}"
+        return f"⚠️ Selitys epäonnistui ({type(e).__name__}). Yritä hetken päästä uudelleen."
 def nayta_tulos(tulos, idx, indeksi_avain):
     src = tulos.get("_source", {})
     highlights = tulos.get("highlight", {})
+    indeksi_avain = tuloksen_indeksi(src, indeksi_avain)
 
     if indeksi_avain == "df":
         otsikko = src.get("df", src.get("indexterm", f"Asiakirja #{idx+1}"))
@@ -788,7 +842,7 @@ def nayta_tulos(tulos, idx, indeksi_avain):
                         unsafe_allow_html=True
                     )
 
-            # ── Claude-selitys ────────────────────────────────────────────────
+            # ── Tekoälyselitys (Gemini) ────────────────────────────────────────────────
             selitys_avain = f"selitys_{idx}_{tulos.get('_id', '')}"
             teksti_kentta_selitys = "transcript" if indeksi_avain == "df" else "teksti"
             asiakirja_teksti = src.get(teksti_kentta_selitys, "")
@@ -796,7 +850,7 @@ def nayta_tulos(tulos, idx, indeksi_avain):
             if st.button("✨ Selitä asiakirja tekoälyllä", key=f"btn_{selitys_avain}"):
                 if asiakirja_teksti:
                     with st.spinner("Tekoäly analysoi asiakirjaa..."):
-                        selitys = selita_asiakirja_claudella(asiakirja_teksti)
+                        selitys = selita_asiakirja_geminilla(asiakirja_teksti)
                         st.session_state[selitys_avain] = selitys
                 else:
                     st.warning("Asiakirjassa ei ole tekstisisältöä.")
@@ -809,7 +863,6 @@ def nayta_tulos(tulos, idx, indeksi_avain):
 
 
 def suodata_ja_jarjesta(tulokset, indeksi_avain, jarjestys, aineisto_filtteri, valitut_tagit):
-    vuosi_kentta = "dating_start_year" if indeksi_avain == "df" else "alkuvuosi"
 
     if aineisto_filtteri and aineisto_filtteri != "Kaikki":
         tulokset = [
@@ -824,7 +877,7 @@ def suodata_ja_jarjesta(tulokset, indeksi_avain, jarjestys, aineisto_filtteri, v
         tulokset = [t for t in tulokset if tulos_sisaltaa_tagit(t)]
 
     def hae_vuosi(t):
-        v = t["_source"].get(vuosi_kentta)
+        v = t["_source"].get("alkuvuosi", t["_source"].get("dating_start_year"))
         try:
             return int(v)
         except (TypeError, ValueError):
@@ -910,8 +963,14 @@ def main():
         indeksi_avain = INDEKSIT[indeksi_nimi]
 
         st.subheader("📅 Aikaväli")
-        vuosi_minimi = 1500 if "voudintilit" in indeksi_avain else (1100 if indeksi_avain == "df" else 1600)
-        vuosi_maksimi = 1634 if "voudintilit" in indeksi_avain else (1500 if indeksi_avain == "df" else 1950)
+        if on_yhdistelma(indeksi_avain):
+            vuosi_minimi, vuosi_maksimi = 1100, 1950
+        elif indeksi_avain == "voudintilit":
+            vuosi_minimi, vuosi_maksimi = 1500, 1634
+        elif indeksi_avain == "df":
+            vuosi_minimi, vuosi_maksimi = 1100, 1500
+        else:
+            vuosi_minimi, vuosi_maksimi = 1600, 1950
 
         col1, col2 = st.columns(2)
         with col1:
@@ -926,7 +985,7 @@ def main():
             "🗺️ Maakunta (rajaa hakua)",
             options=["Kaikki"] + kaikki_maakunnat,
             index=0,
-            help="Rajaa haku tietyn maakunnan tuomiokirja-aineistoihin. Ei toimi Diplomatarium Fennicumilla."
+            help="Rajaa haku tietyn maakunnan tuomiokirja-aineistoihin. Diplomatarium Fennicumissa ei ole maakuntatietoa, joten se jää pois rajattaessa."
         )
         maakunta_filtteri = None if maakunta_valinta == "Kaikki" else maakunta_valinta
 
