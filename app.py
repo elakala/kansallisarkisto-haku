@@ -11,6 +11,8 @@ import os
 import re
 import html
 import random
+from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 import json
 from dotenv import load_dotenv
 
@@ -722,6 +724,31 @@ Asiakirja:
 {katkelma}"""
 
 
+KIINTIO_LOPPU = "kiintio_loppu"
+
+
+@st.cache_resource
+def _kiintion_tila():
+    """Palvelimen yhteinen tila: näkyy kaikille käyttäjille (sinä ja isä) samaan aikaan."""
+    return {"estetty_asti": None}
+
+
+def kiintio_estetty_asti():
+    """Palauttaa ajan (Helsingin aikaa), jolloin selitykset palaavat, tai None jos käytössä."""
+    asti = _kiintion_tila()["estetty_asti"]
+    if asti and datetime.now(timezone.utc) < asti:
+        return (asti - timedelta(minutes=2)).astimezone(ZoneInfo("Europe/Helsinki"))  # näytetään tasatunti
+    return None
+
+
+def merkitse_kiintio_loppuneeksi():
+    """Googlen päiväkiintiö nollautuu keskiyöllä Tyynenmeren aikaa (Suomessa klo 10 tai 9 kesäaikojen erotessa).
+    Estetään toiminto siihen asti, ettei turhia pyyntöjä lähetetä."""
+    nyt_la = datetime.now(ZoneInfo("America/Los_Angeles"))
+    keskiyo = (nyt_la + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+    _kiintion_tila()["estetty_asti"] = keskiyo.astimezone(timezone.utc) + timedelta(minutes=2)
+
+
 class GeminiVirhe(Exception):
     def __init__(self, koodi, viesti):
         super().__init__(viesti)
@@ -739,6 +766,7 @@ def _selitys_valimuistista(katkelma, _avain):
         "generationConfig": {"maxOutputTokens": 1000},
     }
     viimeisin = None
+    paivaraja_tayttyi = 0
     for malli, nimi in GEMINI_MALLIT:
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{malli}:generateContent"
         try:
@@ -748,6 +776,8 @@ def _selitys_valimuistista(katkelma, _avain):
             raise GeminiVirhe(0, f"Yhteys tekoälypalveluun epäonnistui ({type(e).__name__}).")
         if resp.status_code in (404, 429, 503):
             viimeisin = resp.status_code  # malli täynnä, ylikuormittunut tai poistunut: kokeillaan seuraavaa
+            if resp.status_code == 429 and "PerDay" in resp.text:
+                paivaraja_tayttyi += 1
             continue
         if resp.status_code in (400, 401, 403):
             raise GeminiVirhe(resp.status_code, "Gemini API-avain virheellinen. Tarkista GEMINI_API_KEY.")
@@ -758,8 +788,10 @@ def _selitys_valimuistista(katkelma, _avain):
         if not teksti:
             raise GeminiVirhe(200, "Tekoäly palautti tyhjän vastauksen tai sisältö suodatettiin.")
         return teksti, nimi
+    if viimeisin == 429 and paivaraja_tayttyi:
+        raise GeminiVirhe(KIINTIO_LOPPU, "Päivän ilmaiset tekoälyselitykset on käytetty.")
     if viimeisin == 429:
-        raise GeminiVirhe(429, "Päivän ilmaiset tekoälyselitykset on käytetty. Kiintiö nollautuu klo 10 Suomen aikaa.")
+        raise GeminiVirhe(429, "Tekoälyltä pyydettiin juuri liian monta selitystä. Odota minuutti ja yritä uudelleen.")
     raise GeminiVirhe(viimeisin or 0, "Tekoälypalvelu ei juuri nyt vastaa. Yritä hetken päästä uudelleen.")
 
 
@@ -773,6 +805,8 @@ def selita_asiakirja_geminilla(asiakirja_teksti: str):
     try:
         return _selitys_valimuistista(katkelma, gemini_avain)
     except GeminiVirhe as e:
+        if e.koodi == KIINTIO_LOPPU:
+            merkitse_kiintio_loppuneeksi()
         return str(e), None
 
 
@@ -859,11 +893,21 @@ def nayta_tulos(tulos, idx, indeksi_avain):
                         unsafe_allow_html=True)
 
         selitys_avain = f"selitys_{idx}_{tulos.get('_id', '')}"
-        if st.button("Selitä asiakirja selkokielellä", key=f"btn_{selitys_avain}",
-                     icon=":material/auto_awesome:"):
+        palautuu = kiintio_estetty_asti()
+        if palautuu and selitys_avain not in st.session_state:
+            with st.container(key=f"estetty_{selitys_avain}"):
+                st.button("Tekoälyselitykset käytetty tältä päivältä", key=f"btn_{selitys_avain}",
+                          icon=":material/block:", disabled=True,
+                          help=f"Selitykset palaavat käyttöön {palautuu:%d.%m. klo %H.%M}.")
+        elif st.button("Selitä asiakirja selkokielellä", key=f"btn_{selitys_avain}",
+                       icon=":material/auto_awesome:"):
             if koko_teksti:
                 with st.spinner("Tekoäly lukee asiakirjaa…"):
                     st.session_state[selitys_avain] = selita_asiakirja_geminilla(koko_teksti)
+                if kiintio_estetty_asti():
+                    # Kiintiö loppui juuri: päivitetään koko sivu, jotta kaikki napit ja ilmoitus muuttuvat
+                    st.session_state.pop(selitys_avain, None)
+                    st.rerun()
             else:
                 st.warning("Asiakirjassa ei ole tekstiä, jota selittää.")
 
@@ -955,6 +999,11 @@ div[data-testid="stForm"] [data-testid="InputInstructions"] { display: none; }
 .rajaus { display: inline-block; padding: 3px 12px; border-radius: 999px; background: #e3ded5;
   color: #24211e; font-size: 0.9rem; border: 1px solid #d3cdc2; }
 [data-testid="stHeaderActionElements"] { display: none; }
+.kiintio-ilmoitus { background: #fbe9e7; border: 1px solid #efb7ae; color: #7a1d12; border-radius: 8px;
+  padding: 12px 16px; margin: -0.5rem 0 1.25rem 0; line-height: 1.5; }
+[class*="st-key-estetty_"] button, [class*="st-key-estetty_"] button:disabled { background: #b42318 !important;
+  border-color: #b42318 !important; color: #fff !important; opacity: 1 !important; cursor: not-allowed; }
+[class*="st-key-estetty_"] button p, [class*="st-key-estetty_"] button span { color: #fff !important; }
 .tagi { display: inline-block; padding: 2px 10px; margin: 0 6px 4px 0; border-radius: 999px;
   background: #f3e6c8; color: #6e4c12; font-size: 0.85rem; }
 .katkelma { background: #ece9e3; padding: 10px 14px; border-radius: 6px; margin-top: 10px;
@@ -1115,6 +1164,13 @@ def main():
           </div>
         </div>
     """, unsafe_allow_html=True)
+    palautuu = kiintio_estetty_asti()
+    if palautuu:
+        st.markdown(
+            "<div class='kiintio-ilmoitus' role='status'><strong>Tekoälyselitykset on käytetty tältä päivältä.</strong> "
+            f"Ilmainen kiintiö täyttyi, joten toiminto on pois käytöstä {palautuu:%d.%m.} klo {palautuu:%H.%M} asti. "
+            "Haku toimii normaalisti.</div>", unsafe_allow_html=True)
+
     api_avain = hae_api_avain()
 
     # ── Päähaku: yksi kenttä, Enter hakee ──────────────────────────────────────
