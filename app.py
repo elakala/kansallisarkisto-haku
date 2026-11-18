@@ -918,7 +918,8 @@ def nayta_selityslaatikko(tulos, idx, koko_teksti):
         if valmis and valmis[1]:
             selitys, malli = valmis
             st.markdown("<div class='selitys-otsikko'>Mitä tässä sanotaan?</div>", unsafe_allow_html=True)
-            st.markdown(selitys)
+            # Pelkän lihavoidun otsikon riville rivinvaihto, jotta otsikko ei liimaudu seuraavaan tekstiin
+            st.markdown(re.sub(r"(?m)^(\*\*[^*\n]+\*\*):?\s*$", r"\1  ", selitys))
             st.caption(f"Tekoälyn tulkinta ({malli}). Tarkista tärkeät tiedot alkuperäisestä asiakirjasta.")
             return
 
@@ -940,7 +941,7 @@ def nayta_selityslaatikko(tulos, idx, koko_teksti):
         if paikka.button("Selitä asiakirja", key=f"btn_{selitys_avain}", type="primary",
                          icon=":material/auto_awesome:"):
             paikka.empty()  # painike pois työn ajaksi, ettei sitä paineta uudelleen
-            with st.spinner("Tekoäly lukee asiakirjaa ja kirjoittaa selitystä. Tämä kestää yleensä 5–15 sekuntia…",
+            with st.spinner("Tekoäly lukee asiakirjaa ja kirjoittaa selitystä. Tämä kestää yleensä 10–30 sekuntia…",
                             ):
                 tulos_ = selita_asiakirja_geminilla(koko_teksti)
             if kiintio_estetty_asti():
