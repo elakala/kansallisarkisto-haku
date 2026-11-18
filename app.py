@@ -9,11 +9,18 @@ import plotly.express as px
 import requests
 import os
 import re
+import html
+import json
 from dotenv import load_dotenv
 
 load_dotenv()
 
 ES_URL = "https://es.demo.kansallisarkisto.fi"
+
+# Korostusmerkit, jotka eivät esiinny asiakirjateksteissä. Muutetaan <mark>-tageiksi
+# vasta kun teksti on turvallisesti escapattu.
+KOROSTUS_ALKU = "\u0002"
+KOROSTUS_LOPPU = "\u0003"
 
 NIMIVARIAATIOT = {
     "juho": ["juho", "johan", "johannes", "juhana", "juhani"],
@@ -61,13 +68,13 @@ def teksti_kentat(indeksi):
     return ["teksti"]
 
 ASIASANAT = {
-    "⚖️ Oikeudenkäynti": ["tuomio", "käräjä", "syyte", "vastaaja", "kantaja", "sakko", "rangaistus", "oikeus", "dom", "rätt", "sak", "böter", "straff"],
-    "💰 Kauppa & velka": ["kauppa", "velka", "maksu", "myynti", "osto", "handel", "skuld", "betalning", "köp", "sälj", "köpman"],
-    "🏠 Perintö & omaisuus": ["perintö", "testamentti", "tila", "maa", "omaisuus", "arv", "testamente", "gård", "jord", "egendom", "hemman"],
-    "👤 Henkilö": ["nimeltä", "poika", "tytär", "vaimo", "mies", "leski", "son", "dotter", "hustru", "man", "änka", "enka"],
-    "⛪ Kirkko & uskonto": ["kirkko", "pappi", "seurakunta", "kyrka", "präst", "församling", "noita", "taikuus", "häxeri"],
-    "🔪 Väkivalta": ["tappo", "murha", "haavoitti", "löi", "mord", "dråp", "slagsmål", "sår"],
-    "🌾 Maatalous": ["talo", "torppari", "ratsutila", "pelto", "heinä", "hevonen", "bonde", "torpare", "åker", "häst"],
+    "Oikeudenkäynti": ["tuomio", "käräjä", "syyte", "vastaaja", "kantaja", "sakko", "rangaistus", "oikeus", "dom", "rätt", "sak", "böter", "straff"],
+    "Kauppa ja velka": ["kauppa", "velka", "maksu", "myynti", "osto", "handel", "skuld", "betalning", "köp", "sälj", "köpman"],
+    "Perintö ja omaisuus": ["perintö", "testamentti", "tila", "maa", "omaisuus", "arv", "testamente", "gård", "jord", "egendom", "hemman"],
+    "Henkilö": ["nimeltä", "poika", "tytär", "vaimo", "mies", "leski", "son", "dotter", "hustru", "man", "änka", "enka"],
+    "Kirkko ja uskonto": ["kirkko", "pappi", "seurakunta", "kyrka", "präst", "församling", "noita", "taikuus", "häxeri"],
+    "Väkivalta": ["tappo", "murha", "haavoitti", "löi", "mord", "dråp", "slagsmål", "sår"],
+    "Maatalous": ["talo", "torppari", "ratsutila", "pelto", "heinä", "hevonen", "bonde", "torpare", "åker", "häst"],
 }
 
 # ── Aineistokokonaisuus → Maakunta -hakemisto ─────────────────────────────────
@@ -337,22 +344,20 @@ def generoi_tagit(src, indeksi_avain):
         vuosi = int(src.get("alkuvuosi", src.get("dating_start_year", 0)) or 0)
         if vuosi:
             vuosisata = (vuosi // 100) * 100
-            tagit.append(f"📅 {vuosisata}-luku")
+            tagit.append(f"{vuosisata}-luku")
     except (TypeError, ValueError):
         pass
 
     # Paikkakunta- ja maakuntätägi aineistokokonaisuudesta
     if indeksi_avain != "df":
-        paikkakunta, maakunta = etsi_paikkakunta_aineistosta(aineistokokonaisuus)
-        if paikkakunta:
-            tagit.append(f"📍 {paikkakunta}")
+        _, maakunta = etsi_paikkakunta_aineistosta(aineistokokonaisuus)
         if maakunta:
-            tagit.append(f"🗺️ {maakunta}")
+            tagit.append(maakunta)
     else:
         # DF: antopaikka
         paikka = src.get("issuingplace", "")
         if paikka:
-            tagit.append(f"📍 {paikka}")
+            tagit.append(paikka)
 
     # Asiasanatägit (max 2)
     loydetyt = []
@@ -364,9 +369,9 @@ def generoi_tagit(src, indeksi_avain):
     if indeksi_avain == "df":
         kieli = src.get("language", "")
         if kieli:
-            tagit.append(f"🗣️ {kieli}")
+            tagit.append(kieli)
 
-    return tagit[:5]  # max 5 tägejä
+    return tagit[:5]  # max 5 tägiä
 
 
 def hae_api_avain():
@@ -547,8 +552,8 @@ def rakenna_kysely(hakusana, vuosi_alku, vuosi_loppu, indeksi, nimivariaatiot, m
 
     highlight = {
         "fields": {k: {"fragment_size": 500, "number_of_fragments": 2} for k in kentat},
-        "pre_tags": ["**"],
-        "post_tags": ["**"]
+        "pre_tags": [KOROSTUS_ALKU],
+        "post_tags": [KOROSTUS_LOPPU]
     }
 
     aggs = {
@@ -591,7 +596,6 @@ def _hae_es(api_avain, indeksi, kysely_json):
 
 
 def tee_haku(api_avain, indeksi, kysely):
-    import json
     kysely_json = json.dumps(kysely, ensure_ascii=False, sort_keys=True)
     try:
         return _hae_es(api_avain, indeksi, kysely_json)
@@ -612,91 +616,74 @@ def tee_haku(api_avain, indeksi, kysely):
     return None
 
 
-def nayta_kpi_kortit(osumia, data, indeksi_avain, naytettavia):
-    vuodet = []
-    for h in data:
-        v = h["_source"].get("alkuvuosi", h["_source"].get("dating_start_year"))
-        try:
-            vuodet.append(int(v))
-        except (TypeError, ValueError):
-            pass
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Osumia yhteensä", f"{osumia:,}".replace(",", " "))
-    col2.metric("Näytetään", naytettavia)
-    col3.metric("Vanhin asiakirja", str(min(vuodet)) if vuodet else "–")
-    col4.metric("Uusin asiakirja", str(max(vuodet)) if vuodet else "–")
+PAAVARI = "#8a3b22"  # sama kuin teeman primaryColor (.streamlit/config.toml)
 
 
-def nayta_visualisoinnit(resp, indeksi_avain):
+def muotoile_luku(n):
+    """3770 → '3 770' (suomalainen tuhaterotin, sitova välilyönti)."""
+    return f"{n:,}".replace(",", " ")
+
+
+def vuosikymmenjakauma(resp):
+    """Vuosikymmen → osumamäärä koko hakutuloksesta (ei vain näytetyistä)."""
     aggregaatit = resp.get("aggregations", {})
     vuosikymmenet = {}
     for nimi in ("vuosittain", "vuosittain_df"):  # yhdistelmähaussa kaksi vuosikenttää
         for b in aggregaatit.get(nimi, {}).get("buckets", []):
             if b["doc_count"] > 0:
-                vuosikymmenet[b["key"]] = vuosikymmenet.get(b["key"], 0) + b["doc_count"]
+                avain = int(b["key"])
+                vuosikymmenet[avain] = vuosikymmenet.get(avain, 0) + b["doc_count"]
+    return vuosikymmenet
+
+
+def _tyyli_kaavio(fig, korkeus=None):
+    fig.update_layout(
+        plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
+        showlegend=False, margin=dict(l=8, r=8, t=48, b=8),
+        font=dict(size=14),
+    )
+    if korkeus:
+        fig.update_layout(height=korkeus)
+    return fig
+
+
+def nayta_visualisoinnit(resp):
+    vuosikymmenet = vuosikymmenjakauma(resp)
     if vuosikymmenet:
         df_aika = pd.DataFrame([
             {"Vuosikymmen": k, "Osumia": n} for k, n in sorted(vuosikymmenet.items())
         ])
-        if not df_aika.empty:
-            fig = px.bar(
-                df_aika, x="Vuosikymmen", y="Osumia",
-                title="Osumien jakautuminen vuosikymmenittäin",
-                color="Osumia", color_continuous_scale="Teal"
-            )
-            fig.update_layout(
-                plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
-                showlegend=False, coloraxis_showscale=False
-            )
-            st.plotly_chart(fig, use_container_width=True)
+        fig = px.bar(df_aika, x="Vuosikymmen", y="Osumia",
+                     title="Osumat vuosikymmenittäin",
+                     color_discrete_sequence=[PAAVARI])
+        st.plotly_chart(_tyyli_kaavio(fig), width="stretch")
 
     agg_aineistot = resp.get("aggregations", {}).get("aineistot", {}).get("buckets", [])
     if agg_aineistot:
-        # ── Maakuntakaavio ────────────────────────────────────────────────────
         maakunta_laskuri = {}
         for b in agg_aineistot:
             _, maakunta = etsi_paikkakunta_aineistosta(b["key"])
-            if maakunta:
-                maakunta_laskuri[maakunta] = maakunta_laskuri.get(maakunta, 0) + b["doc_count"]
-            else:
-                maakunta_laskuri["Muu/tuntematon"] = maakunta_laskuri.get("Muu/tuntematon", 0) + b["doc_count"]
+            avain = maakunta or "Muu tai tuntematon"
+            maakunta_laskuri[avain] = maakunta_laskuri.get(avain, 0) + b["doc_count"]
 
         if maakunta_laskuri:
             df_mk = pd.DataFrame([
-                {"Maakunta": mk, "Osumia": n}
-                for mk, n in maakunta_laskuri.items()
+                {"Maakunta": mk, "Osumia": n} for mk, n in maakunta_laskuri.items()
             ]).sort_values("Osumia", ascending=True)
+            fig_mk = px.bar(df_mk, x="Osumia", y="Maakunta", orientation="h",
+                            title="Osumat maakunnittain",
+                            color_discrete_sequence=[PAAVARI])
+            st.plotly_chart(_tyyli_kaavio(fig_mk, max(300, len(maakunta_laskuri) * 36)),
+                            width="stretch")
 
-            fig_mk = px.bar(
-                df_mk, x="Osumia", y="Maakunta", orientation="h",
-                title="Osumien jakautuminen maakunnittain",
-                color="Osumia", color_continuous_scale="Teal"
-            )
-            fig_mk.update_layout(
-                plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
-                showlegend=False, coloraxis_showscale=False,
-                height=max(300, len(maakunta_laskuri) * 40)
-            )
-            st.plotly_chart(fig_mk, use_container_width=True)
-
-        # ── Aineistokaavio (expander, ei oletuksena auki) ─────────────────────
-        with st.expander("Näytä jakauma aineistokokonaisuuksittain"):
-            df_a = pd.DataFrame([
-                {"Aineisto": b["key"], "Osumia": b["doc_count"]}
-                for b in agg_aineistot
-            ]).sort_values("Osumia", ascending=True)
-            fig2 = px.bar(
-                df_a, x="Osumia", y="Aineisto", orientation="h",
-                title="Osumien jakautuminen aineistokokonaisuuksittain",
-                color="Osumia", color_continuous_scale="Sunset"
-            )
-            fig2.update_layout(
-                plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
-                showlegend=False, coloraxis_showscale=False,
-                height=max(300, len(agg_aineistot) * 35)
-            )
-            st.plotly_chart(fig2, use_container_width=True)
-
+        df_a = pd.DataFrame([
+            {"Aineisto": b["key"], "Osumia": b["doc_count"]} for b in agg_aineistot
+        ]).sort_values("Osumia", ascending=True)
+        fig2 = px.bar(df_a, x="Osumia", y="Aineisto", orientation="h",
+                      title="Osumat aineistokokonaisuuksittain",
+                      color_discrete_sequence=["#b58a5a"])
+        st.plotly_chart(_tyyli_kaavio(fig2, max(300, len(agg_aineistot) * 32)),
+                        width="stretch")
 
 
 def hae_gemini_avain():
@@ -764,105 +751,100 @@ Asiakirja:
         return f"⚠️ API-virhe: {e.response.status_code if e.response else 'Tuntematon'}"
     except Exception as e:
         return f"⚠️ Selitys epäonnistui ({type(e).__name__}). Yritä hetken päästä uudelleen."
+def turvallinen_katkelma(teksti):
+    """Escapataan asiakirjan teksti ja muutetaan ES:n korostusmerkit <mark>-tageiksi."""
+    teksti = html.escape(teksti or "")
+    return (teksti.replace(KOROSTUS_ALKU, "<mark>")
+                  .replace(KOROSTUS_LOPPU, "</mark>")
+                  .replace("\n", "<br>"))
+
+
+def tuloksen_vuosi(src):
+    alku = src.get("alkuvuosi", src.get("dating_start_year"))
+    loppu = src.get("loppuvuosi", src.get("dating_end_year"))
+    if alku in (None, "") and loppu in (None, ""):
+        return "Vuosi ei tiedossa"
+    if loppu in (None, "") or str(loppu) == str(alku):
+        return str(alku)
+    return f"{alku}–{loppu}"
+
+
+ASIASANATAGIT = set(ASIASANAT.keys()) - {"Henkilö"}  # liian yleinen näytettäväksi
+
+
 def nayta_tulos(tulos, idx, indeksi_avain):
     src = tulos.get("_source", {})
     highlights = tulos.get("highlight", {})
     indeksi_avain = tuloksen_indeksi(src, indeksi_avain)
+    url = src.get("url", "")
 
     if indeksi_avain == "df":
-        otsikko = src.get("df", src.get("indexterm", f"Asiakirja #{idx+1}"))
-        vuosi = src.get("dating_start_year", "?")
         paikka = src.get("issuingplace", "")
+        lahde = src.get("df", src.get("indexterm", "Diplomatarium Fennicum"))
         teksti_kentta = "transcript"
     else:
-        otsikko = src.get("arkistoyksikkö", src.get("aineistokokonaisuus", f"Asiakirja #{idx+1}"))
-        vuosi = src.get("alkuvuosi", "?")
-        paikka = src.get("aineistokokonaisuus", "")
+        _, maakunta = etsi_paikkakunta_aineistosta(src.get("aineistokokonaisuus", ""))
+        paikka = maakunta or ""
+        osat = [src.get("aineistokokonaisuus", ""), src.get("arkistoyksikkö", "")]
+        lahde = " · ".join(o for o in osat if o)
         teksti_kentta = "teksti"
 
-    with st.container():
-        header_cols = st.columns([6, 1])
-        with header_cols[0]:
-            otsikko_str = f"**{otsikko}**"
-            if paikka and paikka != otsikko:
-                otsikko_str += f" · {paikka}"
-            st.markdown(otsikko_str)
-        with header_cols[1]:
-            url = src.get("url", "")
-            if url:
-                st.markdown(f"[🔗 Astia]({url})")
+    # Kärkeen se, mitä sukututkija etsii ensin: vuosi ja paikka. Lähde toissijaisena.
+    otsikko = f"<span class='tulos-vuosi'>{html.escape(tuloksen_vuosi(src))}</span>"
+    if paikka:
+        otsikko += f"<span class='tulos-paikka'> · {html.escape(paikka)}</span>"
+    linkki = (f"<a class='tulos-linkki' href='{html.escape(url, quote=True)}' target='_blank' "
+              f"rel='noopener'>Avaa alkuperäinen asiakirja (Astia)</a>") if url else ""
 
-        tagit = generoi_tagit(src, indeksi_avain)
-        if tagit:
-            st.markdown(" &nbsp; ".join([f"`{t}`" for t in tagit]))
+    aiheet = [t for t in generoi_tagit(src, indeksi_avain) if t in ASIASANATAGIT]
+    tagirivi = "".join(f"<span class='tagi'>{html.escape(t)}</span>" for t in aiheet)
 
-        katkelmat = highlights.get(teksti_kentta, [])
-        if katkelmat:
-            katkelma = katkelmat[0]
-            st.markdown(
-                f"<div style='background:#f8f9fa; border-left:3px solid #cbd5e0; "
-                f"padding:8px 12px; border-radius:4px; font-size:0.88rem; "
-                f"color:#4a5568; margin:4px 0 2px 0;'>{katkelma}</div>",
-                unsafe_allow_html=True
-            )
+    katkelmat = highlights.get(teksti_kentta, [])
+    if katkelmat:
+        katkelma = turvallinen_katkelma(katkelmat[0])
+    else:
+        teksti = src.get(teksti_kentta, "") or ""
+        katkelma = turvallinen_katkelma(teksti[:300] + ("…" if len(teksti) > 300 else ""))
+
+    st.markdown(
+        f"<div class='tulos'>"
+        f"<div class='tulos-otsikko'><div>{otsikko}</div>{linkki}</div>"
+        f"<div class='tulos-lahde'>{html.escape(lahde)}</div>"
+        + (f"<div class='tagirivi'>{tagirivi}</div>" if tagirivi else "")
+        + (f"<div class='katkelma'>{katkelma}</div>" if katkelma else "")
+        + "</div>",
+        unsafe_allow_html=True,
+    )
+
+    with st.expander("Koko teksti ja tekoälyselitys", expanded=False):
+        if indeksi_avain != "df":
+            st.caption(f"**Aineisto:** {src.get('aineistokokonaisuus', '–')}  \n"
+                       f"**Pääsarja:** {src.get('pääsarja', '–')}  \n"
+                       f"**Arkistoyksikkö:** {src.get('arkistoyksikkö', '–')}")
         else:
-            teksti = src.get(teksti_kentta, "")
-            if teksti:
-                st.markdown(
-                    f"<div style='background:#f8f9fa; border-left:3px solid #cbd5e0; "
-                    f"padding:8px 12px; border-radius:4px; font-size:0.88rem; "
-                    f"color:#4a5568; margin:4px 0 2px 0;'>{teksti[:300]}{'...' if len(teksti) > 300 else ''}</div>",
-                    unsafe_allow_html=True
-                )
+            st.caption(f"**Antopaikka:** {src.get('issuingplace', '–')} ({src.get('issuingplacecountry', '')})  \n"
+                       f"**Kieli:** {src.get('language', '–')}")
 
-        with st.expander("Lisätiedot", expanded=False):
-            mcols = st.columns(2)
-            with mcols[0]:
-                if indeksi_avain != "df":
-                    st.caption(f"**Aineisto:** {src.get('aineistokokonaisuus', '–')}")
-                    st.caption(f"**Pääsarja:** {src.get('pääsarja', '–')}")
-                    st.caption(f"**Arkistoyksikkö:** {src.get('arkistoyksikkö', '–')}")
-                else:
-                    st.caption(f"**Antopaikka:** {src.get('issuingplace', '–')} ({src.get('issuingplacecountry', '')})")
-                    st.caption(f"**Kieli:** {src.get('language', '–')}")
-            with mcols[1]:
-                st.caption(f"**Aikaväli:** {src.get('alkuvuosi', src.get('dating_start_year', '?'))} – {src.get('loppuvuosi', src.get('dating_end_year', '?'))}")
-                if url:
-                    st.markdown(f"[🔗 Avaa Astiassa]({url})")
+        koko_teksti = src.get(teksti_kentta, "") or ""
+        if koko_teksti:
+            st.markdown(f"<div class='koko-teksti'>{turvallinen_katkelma(koko_teksti)}</div>",
+                        unsafe_allow_html=True)
 
-            st.divider()
-
-            # ── Koko teksti ───────────────────────────────────────────────────
-            teksti_kentta_koko = "transcript" if indeksi_avain == "df" else "teksti"
-            koko_teksti = src.get(teksti_kentta_koko, "")
+        selitys_avain = f"selitys_{idx}_{tulos.get('_id', '')}"
+        if st.button("Selitä asiakirja selkokielellä", key=f"btn_{selitys_avain}",
+                     icon=":material/auto_awesome:"):
             if koko_teksti:
-                with st.expander("📜 Näytä koko teksti"):
-                    st.markdown(
-                        f"<div style='font-size:0.85rem; line-height:1.7; color:#4a5568;'>{koko_teksti}</div>",
-                        unsafe_allow_html=True
-                    )
+                with st.spinner("Tekoäly lukee asiakirjaa…"):
+                    st.session_state[selitys_avain] = selita_asiakirja_geminilla(koko_teksti)
+            else:
+                st.warning("Asiakirjassa ei ole tekstiä, jota selittää.")
 
-            # ── Tekoälyselitys (Gemini) ────────────────────────────────────────────────
-            selitys_avain = f"selitys_{idx}_{tulos.get('_id', '')}"
-            teksti_kentta_selitys = "transcript" if indeksi_avain == "df" else "teksti"
-            asiakirja_teksti = src.get(teksti_kentta_selitys, "")
-
-            if st.button("✨ Selitä asiakirja tekoälyllä", key=f"btn_{selitys_avain}"):
-                if asiakirja_teksti:
-                    with st.spinner("Tekoäly analysoi asiakirjaa..."):
-                        selitys = selita_asiakirja_geminilla(asiakirja_teksti)
-                        st.session_state[selitys_avain] = selitys
-                else:
-                    st.warning("Asiakirjassa ei ole tekstisisältöä.")
-
-            if selitys_avain in st.session_state:
-                st.markdown("**✨ Tekoälyselitys:**")
-                st.info(st.session_state[selitys_avain])
-
-        st.divider()
+        if selitys_avain in st.session_state:
+            st.markdown("**Tekoälyn selitys** (tarkista aina alkuperäisestä):")
+            st.info(st.session_state[selitys_avain])
 
 
-def suodata_ja_jarjesta(tulokset, indeksi_avain, jarjestys, aineisto_filtteri, valitut_tagit):
+def suodata_ja_jarjesta(tulokset, indeksi_avain, jarjestys, aineisto_filtteri, valitut_tagit, teksti_filtteri=""):
 
     if aineisto_filtteri and aineisto_filtteri != "Kaikki":
         tulokset = [
@@ -875,6 +857,14 @@ def suodata_ja_jarjesta(tulokset, indeksi_avain, jarjestys, aineisto_filtteri, v
             tuloksen_tagit = generoi_tagit(t["_source"], indeksi_avain)
             return all(tagi in tuloksen_tagit for tagi in valitut_tagit)
         tulokset = [t for t in tulokset if tulos_sisaltaa_tagit(t)]
+
+    if teksti_filtteri and teksti_filtteri.strip():
+        haku = teksti_filtteri.strip().lower()
+        def sisaltaa(t):
+            src = t["_source"]
+            teksti = (src.get("teksti") or src.get("transcript") or "").lower()
+            return haku in teksti
+        tulokset = [t for t in tulokset if sisaltaa(t)]
 
     def hae_vuosi(t):
         v = t["_source"].get("alkuvuosi", t["_source"].get("dating_start_year"))
@@ -891,78 +881,197 @@ def suodata_ja_jarjesta(tulokset, indeksi_avain, jarjestys, aineisto_filtteri, v
     return tulokset
 
 
+# ── Ulkoasu ───────────────────────────────────────────────────────────────────
+TYYLIT = """
+<style>
+[data-testid="stMainBlockContainer"] { max-width: 1240px; }
+/* Hakukenttä: isompi kuin muut kentät, koska se on sivun pääasia */
+div[data-testid="stForm"] input[type="text"] { font-size: 1.15rem; min-height: 3rem; }
+div[data-testid="stForm"] { padding: 0; border: none; }
+div[data-testid="stForm"] [data-testid="InputInstructions"] { display: none; }
+
+.banneri { display: flex; min-height: 220px; border-radius: 10px; overflow: hidden;
+  background-size: cover; background-position: center 40%; margin-bottom: 1.5rem; }
+.banneri-sisus { flex: 1; display: flex; flex-direction: column;
+  justify-content: flex-end; padding: 28px 36px;
+  background: linear-gradient(90deg, rgba(25,18,12,0.78) 0%, rgba(25,18,12,0.45) 55%, rgba(25,18,12,0.15) 100%); }
+.banneri h1 { margin: 0; padding: 0; color: #fff; font-family: "Source Serif Pro", "Source Serif 4", Georgia, serif;
+  font-size: clamp(1.8rem, 4vw, 2.6rem); font-weight: 700; line-height: 1.15; letter-spacing: -0.01em; }
+.banneri p { margin: 8px 0 0 0; color: #f6efe4; font-size: 1.08rem; max-width: 60ch; line-height: 1.45; }
+
+.johdanto { font-size: 1.05rem; line-height: 1.6; max-width: 68ch; color: #4a3f35; }
+
+.tulos { padding: 18px 0 10px 0; border-top: 1px solid #e6dccd; }
+.tulos-otsikko { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; flex-wrap: wrap; }
+.tulos-vuosi { font-size: 1.25rem; font-weight: 700; color: #2d2620; font-variant-numeric: tabular-nums; }
+.tulos-paikka { font-size: 1.1rem; color: #2d2620; }
+.tulos-linkki { font-size: 0.95rem; white-space: nowrap; color: #8a3b22 !important; text-underline-offset: 3px; }
+.tulos-lahde { font-size: 0.9rem; color: #6b5d50; margin-top: 2px; }
+.tagirivi { margin-top: 8px; }
+.tagi { display: inline-block; padding: 2px 10px; margin: 0 6px 4px 0; border-radius: 999px;
+  background: #efe5d6; color: #5a4632; font-size: 0.85rem; }
+.katkelma { background: #f6f0e7; padding: 10px 14px; border-radius: 6px; margin-top: 10px;
+  font-size: 0.98rem; line-height: 1.6; color: #3a3129; max-width: 80ch; }
+.katkelma mark, .koko-teksti mark { background: #f2d58f; color: inherit; padding: 0 2px; border-radius: 2px; }
+.koko-teksti { font-size: 0.95rem; line-height: 1.7; color: #3a3129; max-height: 420px; overflow-y: auto; }
+::selection { background: #f2d58f; color: #2d2620; }
+</style>
+"""
+
+BANNERI_URL = ("https://raw.githubusercontent.com/elakala/kansallisarkisto-haku/main/"
+               "ChatGPT%20Image%2022.5.2026%20klo%2018.06.27.png")
+
+ESIMERKKIHAUT = ["Mäntylä", "Juho Mäntylä", "Mänty*"]
+
+
+def _aseta_ja_hae(**arvot):
+    """Painikkeiden callback: asettaa kenttien arvot ja käynnistää haun."""
+    for avain, arvo in arvot.items():
+        st.session_state[avain] = arvo
+    st.session_state["aja_haku"] = True
+
+
+def nayta_nollatulos(haku):
+    hakusana = haku["hakusana"]
+    st.markdown(f"#### Haulla ”{hakusana}” ei löytynyt asiakirjoja")
+    st.markdown("Vanhat asiakirjat on kirjoitettu käsin ja usein ruotsiksi, joten sama nimi voi "
+                "esiintyä monessa muodossa. Kokeile jotakin näistä:")
+
+    ehdotukset = []
+    sanat = pilko_sanoiksi(hakusana)
+    edistynyt = on_edistynyt_haku(hakusana)
+    if not st.session_state.get("nimivariaatiot") and any(s.lower() in NIMIVARIAATIOT for s in sanat):
+        ehdotukset.append(("Hae myös etunimen vanhoilla muodoilla", {"nimivariaatiot": True}))
+    if not st.session_state.get("sumea") and not edistynyt:
+        ehdotukset.append(("Salli pienet kirjoitusvirheet", {"sumea": True}))
+    if len(sanat) == 1 and not edistynyt and len(sanat[0]) >= 5:
+        alku = sanat[0][:-2] + "*"
+        ehdotukset.append((f"Hae sanan alulla {alku}", {"hakusana": alku}))
+    if len(sanat) > 1 and not edistynyt and not st.session_state.get("laaja"):
+        ehdotukset.append(("Riittää, että yksi sanoista löytyy", {"laaja": True}))
+
+    if ehdotukset:
+        sarakkeet = st.columns(len(ehdotukset))
+        for sarake, (teksti, arvot) in zip(sarakkeet, ehdotukset):
+            sarake.button(teksti, on_click=_aseta_ja_hae, kwargs=arvot, width="stretch")
+    st.caption("Voit myös laajentaa aikaväliä tai poistaa maakuntarajauksen sivupalkin "
+               "Tarkenna hakua -osiosta. Paikannimet kannattaa kokeilla ruotsiksi, esim. Ilmajoki → Ilmola, Vaasa → Wasa.")
+
+
+def nayta_tulokset(haku):
+    tulokset_raw = haku["tulokset"]
+    resp = haku["resp"]
+    indeksi = haku["indeksi_avain"]
+    osumia = haku["osumia"]
+
+    st.markdown(f"### Tulokset haulle ”{haku['hakusana']}”")
+    yhteenveto = [f"{muotoile_luku(osumia)} asiakirjaa"]
+    if osumia > len(tulokset_raw):
+        yhteenveto.append(f"näytetään {len(tulokset_raw)} osuvinta")
+    vk = vuosikymmenjakauma(resp)
+    if vk:
+        yhteenveto.append(f"vuosilta {min(vk)}–{max(vk) + 9}")
+    st.markdown(" · ".join(yhteenveto))
+    if haku.get("kuvaus"):
+        st.caption(f"Hakuehto: {haku['kuvaus']}")
+
+    # Rajaus ilman uutta hakua
+    with st.expander("Järjestä ja rajaa tuloksia", expanded=False, icon=":material/tune:"):
+        fcol1, fcol2, fcol3 = st.columns(3)
+        with fcol1:
+            jarjestys = st.selectbox("Järjestys", ["Osuvin ensin", "Vanhin ensin", "Uusin ensin"])
+        with fcol2:
+            aineistot = sorted({t["_source"].get("aineistokokonaisuus", "")
+                                for t in tulokset_raw if t["_source"].get("aineistokokonaisuus")})
+            if aineistot and indeksi != "df":
+                aineisto_filtteri = st.selectbox("Aineistokokonaisuus", ["Kaikki"] + aineistot)
+            else:
+                aineisto_filtteri = "Kaikki"
+        with fcol3:
+            teksti_filtteri = st.text_input("Etsi näistä tuloksista", placeholder="esim. perintö, torppari")
+        kaikki_tagit = sorted({tagi for t in tulokset_raw
+                               for tagi in generoi_tagit(t["_source"], indeksi)})
+        valitut_tagit = st.multiselect("Aihe, maakunta tai vuosisata", options=kaikki_tagit,
+                                       placeholder="Valitse yksi tai useampi")
+
+    tulokset = suodata_ja_jarjesta(tulokset_raw, indeksi, jarjestys, aineisto_filtteri,
+                                   valitut_tagit, teksti_filtteri)
+    if len(tulokset) != len(tulokset_raw):
+        st.caption(f"Rajauksen jälkeen {len(tulokset)} / {len(tulokset_raw)} tulosta.")
+
+    if not tulokset:
+        st.info("Rajaus jätti tulokset tyhjiksi. Poista jokin rajaus yllä.")
+    else:
+        for idx, tulos in enumerate(tulokset):
+            nayta_tulos(tulos, idx, indeksi)
+
+    st.divider()
+    with st.expander("Osumien jakaumat (vuosikymmenet, maakunnat, aineistot)", icon=":material/bar_chart:"):
+        nayta_visualisoinnit(resp)
+
+    if st.query_params.get("debug") == "1" and haku.get("kysely"):
+        with st.expander("Lähetetty kysely (kehittäjille)"):
+            st.json(haku["kysely"])
+
+
 def main():
     st.set_page_config(
-        page_title="Kansallisarkisto Sisältöhaku",
-        page_icon="🏛️",
+        page_title="Kansallisarkiston Sisältöhaku – sukututkimus",
+        page_icon=":material/history_edu:",
         layout="wide",
-        initial_sidebar_state="expanded"
+        initial_sidebar_state="auto",
     )
+    st.markdown(TYYLIT, unsafe_allow_html=True)
 
-    st.markdown("""
-        <style>
-
-        </style>
-    """, unsafe_allow_html=True)
+    # Oletusarvot ennen widgettejä, jotta painikkeet voivat muuttaa niitä
+    for avain, oletus in {"hakusana": "", "nimivariaatiot": True, "sumea": False, "laaja": False}.items():
+        st.session_state.setdefault(avain, oletus)
 
     # ── Banneri ────────────────────────────────────────────────────────────────
-    st.markdown("""
-        <div style="
-            width: 100%;
-            height: 200px;
-            background-image: url('https://raw.githubusercontent.com/elakala/kansallisarkisto-haku/main/ChatGPT%20Image%2022.5.2026%20klo%2018.06.27.png');
-            background-size: cover;
-            background-position: center 40%;
-            border-radius: 8px;
-            margin-bottom: 1rem;
-            position: relative;
-            overflow: hidden;
-        ">
-            <div style="
-                position: absolute; inset: 0;
-                background: linear-gradient(to right, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.1) 60%, rgba(0,0,0,0) 100%);
-                border-radius: 8px;
-                display: flex;
-                flex-direction: column;
-                justify-content: flex-end;
-                padding: 24px 32px;
-            ">
-                <p style="margin:0; font-size:1.8rem; font-weight:700; color:#ffffff; text-shadow: 0 1px 4px rgba(0,0,0,0.6);">🏛️ Kansallisarkiston Sisältöhaku</p>
-                <p style="margin:4px 0 0 0; font-size:0.9rem; color:#e2e8f0; text-shadow: 0 1px 3px rgba(0,0,0,0.5);">Sukututkimuksen ja historiallisen aineiston tehotyökalu · Elasticsearch-rajapinta</p>
-            </div>
+    st.markdown(f"""
+        <div class="banneri" style="background-image:url('{BANNERI_URL}')">
+          <div class="banneri-sisus">
+            <h1>Kansallisarkiston Sisältöhaku</h1>
+            <p>Etsi esivanhempiasi Kansallisarkiston digitoiduista tuomiokirjoista,
+               voudintileistä ja keskiaikaisista asiakirjoista.</p>
+          </div>
         </div>
     """, unsafe_allow_html=True)
-    st.divider()
 
+    api_avain = hae_api_avain()
+
+    # ── Päähaku: yksi kenttä, Enter hakee ──────────────────────────────────────
+    with st.form("haku", border=False, enter_to_submit=True):
+        c1, c2, c3 = st.columns([4.4, 3.6, 1.2], vertical_alignment="bottom")
+        with c1:
+            st.text_input("Hae nimellä, talolla tai paikalla", key="hakusana",
+                          placeholder="esim. Mäntylä tai Juho Mäntylä",
+                          help="Useampi sana: kaikkien pitää löytyä samasta asiakirjasta. "
+                               "Mänty* löytää kaikki Mänty-alkuiset, \"Koivumäen talo\" hakee tarkkaa fraasia, "
+                               "Mäntylä OR Männylä riittää jompikumpi.")
+        with c2:
+            indeksi_nimi = st.selectbox("Aineisto", options=list(INDEKSIT.keys()), index=0, key="aineisto")
+        with c3:
+            lahetetty = st.form_submit_button("Hae", type="primary", icon=":material/search:",
+                                              width="stretch")
+    st.caption("Vinkki: 1600–1800-lukujen tuomiokirjat ovat pääosin ruotsiksi. "
+               "Kokeile nimiä myös ruotsiksi, esim. Juho → Johan, Ilmajoki → Ilmola.")
+    indeksi_avain = INDEKSIT[indeksi_nimi]
+
+    # ── Tarkennettu haku sivupalkissa ──────────────────────────────────────────
     with st.sidebar:
-        st.header("🔍 Hakukriteerit")
+        st.header("Tarkenna hakua")
 
-        api_avain = hae_api_avain()
         if not api_avain:
-            api_avain = st.text_input("🔑 API-avain", type="password",
-                                       help="Hae avain: sanna.joska@kansallisarkisto.fi")
-            if api_avain:
-                st.success("API-avain asetettu")
-        else:
-            st.success("✅ API-avain ladattu ympäristöstä")
+            api_avain = st.text_input("Kansallisarkiston API-avain", type="password",
+                                      help="Avaimen saa Kansallisarkistolta. Katso Ohjeet-välilehti.")
 
-        st.divider()
-
-        hakusana = st.text_input(
-            "📝 Hakusana",
-            placeholder="Esim. Mäntylä, Koivumäki...",
-            help="Perushaku. Voit käyttää: Mänty* (jokerimerkki), \"tarkka fraasi\" (lainausmerkit), Mäntylä OR Männylä (tai-haku)."
-        )
         liittyva_hakusana = st.text_input(
-            "🔗 Liittyvä hakusana (valinnainen)",
-            placeholder="Esim. Jurva, lauttamus...",
-            help="Tämän sanan täytyy löytyä samasta asiakirjasta päähakusanan kanssa (AND-logiikka)."
-        )
+            "Myös tämän sanan pitää löytyä",
+            placeholder="esim. Jurva, lautamies",
+            help="Asiakirjasta pitää löytyä sekä hakusana että tämä sana.")
 
-        indeksi_nimi = st.selectbox("📚 Aineisto", options=list(INDEKSIT.keys()), index=0)
-        indeksi_avain = INDEKSIT[indeksi_nimi]
-
-        st.subheader("📅 Aikaväli")
+        st.subheader("Aikaväli")
         if on_yhdistelma(indeksi_avain):
             vuosi_minimi, vuosi_maksimi = 1100, 1950
         elif indeksi_avain == "voudintilit":
@@ -971,250 +1080,165 @@ def main():
             vuosi_minimi, vuosi_maksimi = 1100, 1500
         else:
             vuosi_minimi, vuosi_maksimi = 1600, 1950
-
         col1, col2 = st.columns(2)
         with col1:
-            vuosi_alku = st.number_input("Alku", min_value=1100, max_value=1980, value=vuosi_minimi, step=10)
+            vuosi_alku = st.number_input("Alkaen", min_value=1100, max_value=1980, value=vuosi_minimi, step=10)
         with col2:
-            vuosi_loppu = st.number_input("Loppu", min_value=1100, max_value=1980, value=vuosi_maksimi, step=10)
+            vuosi_loppu = st.number_input("Päättyen", min_value=1100, max_value=1980, value=vuosi_maksimi, step=10)
+        if vuosi_alku > vuosi_loppu:
+            st.warning("Alkuvuosi on myöhempi kuin loppuvuosi. Haku käyttää vuosia toisin päin.")
+            vuosi_alku, vuosi_loppu = vuosi_loppu, vuosi_alku
 
-        # Maakuntarajaus
-        st.divider()
         kaikki_maakunnat = hae_kaikki_maakunnat()
         maakunta_valinta = st.selectbox(
-            "🗺️ Maakunta (rajaa hakua)",
-            options=["Kaikki"] + kaikki_maakunnat,
-            index=0,
-            help="Rajaa haku tietyn maakunnan tuomiokirja-aineistoihin. Diplomatarium Fennicumissa ei ole maakuntatietoa, joten se jää pois rajattaessa."
-        )
+            "Maakunta", options=["Kaikki"] + kaikki_maakunnat, index=0,
+            help="Rajaa haku maakunnan tuomiokirjoihin. Diplomatarium Fennicum jää pois, "
+                 "koska siinä ei ole maakuntatietoa.")
         maakunta_filtteri = None if maakunta_valinta == "Kaikki" else maakunta_valinta
 
-        # Aineistokokonaisuusfiltteri – näkyy vain jos maakunta valittu ja aineistot tiedossa
         aineisto_tarkka = None
         if maakunta_filtteri and maakunta_filtteri in MAAKUNTA_AINEISTOT:
-            aineistolista = MAAKUNTA_AINEISTOT[maakunta_filtteri]
             aineisto_valinta = st.selectbox(
-                "📁 Aineistokokonaisuus",
-                options=["Kaikki"] + aineistolista,
-                index=0,
-                help="Rajaa haku tiettyyn tuomiokunnan aineistoon."
-            )
+                "Tuomiokunta tai oikeus", options=["Kaikki"] + MAAKUNTA_AINEISTOT[maakunta_filtteri],
+                index=0, help="Rajaa haku yhden tuomiokunnan tai oikeuden aineistoon.")
             aineisto_tarkka = None if aineisto_valinta == "Kaikki" else aineisto_valinta
 
-        st.divider()
-        nimivariaatiot = st.checkbox("🔤 Nimivariaatiot",
-            help="Hakee jokaiselle etunimelle historialliset muodot (esim. Juho → Johan, Johannes).")
-        sumea = st.checkbox("✏️ Salli kirjoitusvirheet",
-            help="Löytää myös pienet poikkeamat, esim. Mäntylä → Mäntyla, Mentylä. "
-                 "Hyödyllinen, koska tuomiokirjojen teksti on koneellisesti tunnistettua käsialaa. "
-                 "Lisää osumia, mutta myös turhia osumia.")
-        laaja = st.checkbox("🌐 Laaja haku (riittää että yksi sana löytyy)",
-            help="Oletuksena kaikkien hakusanojen täytyy löytyä samasta asiakirjasta. "
-                 "Laajassa haussa yksikin sana riittää.")
-        if hakusana:
-            st.info(kuvaa_haku(hakusana, liittyva_hakusana, nimivariaatiot, sumea, laaja))
+        st.subheader("Nimet ja kirjoitusasu")
+        st.checkbox("Etunimen vanhat muodot", key="nimivariaatiot",
+                    help="Hakee etunimelle myös historialliset muodot, esim. Juho → Johan, Johannes.")
+        st.checkbox("Salli pienet kirjoitusvirheet", key="sumea",
+                    help="Löytää myös esim. Mäntyla tai Mentylä. Tuomiokirjojen teksti on koneellisesti "
+                         "tunnistettua käsialaa, joten virheitä on paljon. Tuo myös turhia osumia.")
+        st.checkbox("Riittää, että yksi sanoista löytyy", key="laaja",
+                    help="Oletuksena kaikkien hakusanojen pitää löytyä samasta asiakirjasta.")
 
-        st.divider()
+        st.subheader("Aihe")
         teksti_filtteri_es = st.text_input(
-            "🔎 Rajaa tekstillä (ES-taso)",
-            placeholder="Esim. todistaja, lauttamus...",
-            help="Hakee tällä sanalla koko tietokannasta – ei vain ladatuista tuloksista."
-        )
-        tulosten_maara = st.slider("Tulosten määrä", 10, 500, 100, step=10)
+            "Asiakirjassa mainitaan jokin näistä",
+            placeholder="esim. todistaja, perintö",
+            help="Rajaa tuloksiin, joissa esiintyy ainakin yksi näistä sanoista.")
+        tulosten_maara = st.slider("Näytettävien tulosten määrä", 10, 500, 100, step=10)
 
-        haku_nappi = st.button("🔎 Hae", type="primary", use_container_width=True,
-                                disabled=not (hakusana and api_avain))
-        if not hakusana:
-            st.caption("Syötä hakusana aloittaaksesi.")
-        if not api_avain:
-            st.caption("API-avain puuttuu.")
-
-    tab_haku, tab_ohje = st.tabs(["🔍 Hakutulokset", "ℹ️ Ohjeet"])
+    tab_haku, tab_ohje = st.tabs(["Hakutulokset", "Ohjeet ja vinkit"])
 
     with tab_haku:
-        if haku_nappi and hakusana and api_avain:
-            with st.spinner(f"Haetaan '{hakusana}'..."):
-                kysely = rakenna_kysely(hakusana, vuosi_alku, vuosi_loppu, indeksi_avain, nimivariaatiot, maakunta_filtteri, liittyva_hakusana, teksti_filtteri_es, aineisto_tarkka, sumea=sumea, laaja=laaja)
-                kysely["size"] = tulosten_maara
-                resp = tee_haku(api_avain, indeksi_avain, kysely)
+        hakusana = (st.session_state.get("hakusana") or "").strip()
+        aja = lahetetty or st.session_state.pop("aja_haku", False)
 
-            if resp:
-                osumia = resp.get("hits", {}).get("total", {}).get("value", 0)
-                tulokset_raw = resp.get("hits", {}).get("hits", [])
-                if osumia == 0:
-                    st.warning(f"Ei osumia haulle '{hakusana}' valituilla kriteereillä.")
-                else:
-                    st.session_state["tulokset"] = tulokset_raw
-                    st.session_state["resp"] = resp
-                    st.session_state["indeksi_avain"] = indeksi_avain
-                    st.session_state["osumia"] = osumia
-                    st.session_state["tulosten_maara"] = tulosten_maara
-                st.session_state["viimeisin_kysely"] = kysely
-
-        if "tulokset" in st.session_state and st.session_state["tulokset"]:
-            tulokset_raw = st.session_state["tulokset"]
-            resp = st.session_state["resp"]
-            indeksi_avain_sessio = st.session_state["indeksi_avain"]
-            osumia = st.session_state["osumia"]
-            tulosten_maara_sessio = st.session_state["tulosten_maara"]
-
-            nayta_kpi_kortit(osumia, tulokset_raw, indeksi_avain_sessio, len(tulokset_raw))
-            if "viimeisin_kysely" in st.session_state:
-                with st.expander("🛠️ Näytä lähetetty kysely (vianetsintä)"):
-                    st.json(st.session_state["viimeisin_kysely"])
-            st.divider()
-            nayta_visualisoinnit(resp, indeksi_avain_sessio)
-            st.divider()
-
-            # ── Filtterit juuri ennen tuloksia ─────────────────────────────────
-            st.subheader("Järjestely ja suodatus")
-
-            fcol1, fcol2, fcol3 = st.columns(3)
-            with fcol1:
-                jarjestys = st.selectbox("Järjestys", ["Osuvin ensin", "Vanhin ensin", "Uusin ensin"])
-            with fcol2:
-                aineistot = sorted(set(
-                    t["_source"].get("aineistokokonaisuus", "")
-                    for t in tulokset_raw
-                    if t["_source"].get("aineistokokonaisuus")
-                ))
-                if aineistot and indeksi_avain_sessio != "df":
-                    aineisto_filtteri = st.selectbox("Aineisto", ["Kaikki"] + aineistot)
-                else:
-                    aineisto_filtteri = "Kaikki"
-                    st.selectbox("Aineisto", ["Kaikki"], disabled=True)
-            with fcol3:
-                teksti_filtteri = st.text_input("Hae tuloksista", placeholder="Rajaa sanalla...")
-
-            kaikki_tagit = sorted(set(
-                tagi
-                for t in tulokset_raw
-                for tagi in generoi_tagit(t["_source"], indeksi_avain_sessio)
-            ))
-            valitut_tagit = st.multiselect(
-                "Suodata tägien mukaan",
-                options=kaikki_tagit,
-                placeholder="Valitse yksi tai useampi tägi...",
-            )
-
-            st.divider()
-
-            tulokset = suodata_ja_jarjesta(
-                tulokset_raw, indeksi_avain_sessio,
-                jarjestys, aineisto_filtteri, valitut_tagit
-            )
-
-            if osumia > tulosten_maara_sessio:
-                st.info(f"💡 Haku löysi {osumia:,} osumaa. Näytetään {tulosten_maara_sessio}, joista suodatuksen jälkeen {len(tulokset)}.")
-
-            st.subheader(f"📋 Tulokset ({len(tulokset)})")
-
-            if not tulokset:
-                st.warning("Ei tuloksia nykyisillä suodattimilla.")
+        if aja:
+            # Uusi haku korvaa aina edellisen, myös kun osumia ei löydy
+            st.session_state.pop("hakutulos", None)
+            if not hakusana:
+                st.warning("Kirjoita ensin hakusana, esimerkiksi sukunimi tai talon nimi.")
+            elif not api_avain:
+                st.error("Haku vaatii Kansallisarkiston API-avaimen. Lisää se sivupalkkiin.")
             else:
-                for idx, tulos in enumerate(tulokset):
-                    nayta_tulos(tulos, idx, indeksi_avain_sessio)
+                nimivariaatiot = st.session_state["nimivariaatiot"]
+                sumea = st.session_state["sumea"]
+                laaja = st.session_state["laaja"]
+                with st.spinner(f"Haetaan ”{hakusana}”…"):
+                    kysely = rakenna_kysely(hakusana, vuosi_alku, vuosi_loppu, indeksi_avain,
+                                            nimivariaatiot, maakunta_filtteri, liittyva_hakusana,
+                                            teksti_filtteri_es, aineisto_tarkka, sumea=sumea, laaja=laaja)
+                    kysely["size"] = tulosten_maara
+                    resp = tee_haku(api_avain, indeksi_avain, kysely)
+                if resp:
+                    st.session_state["hakutulos"] = {
+                        "hakusana": hakusana,
+                        "kuvaus": kuvaa_haku(hakusana, liittyva_hakusana, nimivariaatiot, sumea, laaja).replace("  \n", " · "),
+                        "osumia": resp.get("hits", {}).get("total", {}).get("value", 0),
+                        "tulokset": resp.get("hits", {}).get("hits", []),
+                        "resp": resp,
+                        "indeksi_avain": indeksi_avain,
+                        "kysely": kysely,
+                    }
 
-        elif not haku_nappi:
-            st.info("👈 Syötä hakusana sivupalkissa ja paina **Hae**.")
+        haku = st.session_state.get("hakutulos")
+        if haku and haku["osumia"] > 0:
+            nayta_tulokset(haku)
+        elif haku:
+            nayta_nollatulos(haku)
+        elif not aja:
+            st.markdown(
+                "<p class='johdanto'>Käräjien pöytäkirjoissa mainitaan talollisia, torppareita, "
+                "leskiä ja lapsia: maakauppoja, perinnönjakoja, velkoja ja riitoja. Kirjoita hakuun "
+                "sukunimi tai talon nimi, niin näet asiakirjat, joissa se esiintyy, ja pääset "
+                "alkuperäiseen käsinkirjoitettuun sivuun.</p>",
+                unsafe_allow_html=True)
+            st.markdown("**Kokeile esimerkkihakua:**")
+            sarakkeet = st.columns(len(ESIMERKKIHAUT) + 3)
+            for sarake, esim in zip(sarakkeet, ESIMERKKIHAUT):
+                sarake.button(esim, on_click=_aseta_ja_hae, kwargs={"hakusana": esim},
+                              width="stretch")
 
     with tab_ohje:
-        st.subheader("ℹ️ Käyttöohjeet")
-
-        st.markdown("### 🔍 Hakutyypit")
-        st.markdown("""
-Työkalu tukee useita erilaisia hakutapoja. Kirjoita hakusana sivupalkin kenttään.
-        """)
-
+        st.subheader("Näin haet")
         col1, col2 = st.columns(2)
         with col1:
-            st.markdown("**Perushaku**")
+            st.markdown("**Yksi sana**")
             st.code("Mäntylä", language=None)
             st.caption("Hakee kaikki maininnat sanasta.")
 
-            st.markdown("**Usean sanan haku**")
+            st.markdown("**Usea sana**")
             st.code("Juho Mäntylä Jurva", language=None)
-            st.caption("Kaikkien sanojen täytyy löytyä samasta asiakirjasta. Asiakirjat, joissa sanat ovat lähekkäin, nousevat kärkeen. Laaja haku -valinnalla yksikin sana riittää.")
+            st.caption("Kaikkien sanojen pitää löytyä samasta asiakirjasta. Asiakirjat, joissa sanat ovat "
+                       "lähekkäin, nousevat kärkeen. Jos valitset ”Riittää, että yksi sanoista löytyy”, yksikin sana riittää.")
 
-            st.markdown("**Fraasihaku**")
-            st.code('\"Koivumäen talo\"', language=None)
-            st.caption("Sanat täytyy esiintyä tässä järjestyksessä peräkkäin.")
+            st.markdown("**Tarkka fraasi**")
+            st.code('"Koivumäen talo"', language=None)
+            st.caption("Sanojen pitää esiintyä peräkkäin tässä järjestyksessä.")
 
         with col2:
-            st.markdown("**OR-haku**")
+            st.markdown("**Jompikumpi**")
             st.code("Mäntylä OR Männylä", language=None)
-            st.caption("Jompi kumpi sana riittää. Hyödyllinen vanhalle kirjoitusasulle.")
+            st.caption("Kumpi tahansa riittää. Hyödyllinen vanhoille kirjoitusasuille.")
 
-            st.markdown("**Jokerimerkkihaku**")
+            st.markdown("**Sanan alku**")
             st.code("Mänty*", language=None)
-            st.caption("Löytää kaikki sanat jotka alkavat 'Mänty' – Mäntylä, Mäntymäki jne.")
+            st.caption("Löytää kaikki Mänty-alkuiset sanat: Mäntylä, Mäntymäki jne.")
 
-            st.markdown("**Nimivariaatiot**")
-            st.code("Juho  (+ Nimivariaatiot-checkbox)", language=None)
-            st.caption("Hakee automaattisesti: Juho, Johan, Johannes, Juhana, Juhani. Toimii myös usean sanan haussa, esim. Juho Mäntylä.")
-
-            st.markdown("**Salli kirjoitusvirheet**")
-            st.code("Mäntylä  (+ Salli kirjoitusvirheet)", language=None)
-            st.caption("Löytää myös Mäntyla, Mentylä jne. Ensimmäinen kirjain pidetään samana. Isommat kirjoitusasun muutokset kannattaa hakea jokerimerkillä tai OR-haulla.")
+            st.markdown("**Etunimen vanhat muodot**")
+            st.code("Juho", language=None)
+            st.caption("Hakee myös Johan, Johannes, Juhana, Juhani. Valinta on oletuksena päällä "
+                       "ja löytyy sivupalkin kohdasta Nimet ja kirjoitusasu.")
 
         st.divider()
-        st.markdown("### 📚 Aineistot")
+        st.subheader("Aineistot")
         st.markdown("""
 | Aineisto | Sisältö | Aikaväli | Kieli |
 |---|---|---|---|
-| Tuomiokirjat | Yli 7 milj. käräjäkirjasivua | 1600–1900-luvut | Ruotsi/Suomi |
-| Voudintilit | Ruotsin vallan verotusaineisto | 1537–1634 | Ruotsi |
-| Diplomatarium Fennicum | Keskiaikaiset asiakirjat | ~1100–1540 | Latina/Ruotsi |
-
-⚠️ Huomio: Tuomiokirjat ovat pääosin **ruotsiksi** 1600–1800-luvuilla. Hae ruotsinkielisillä muodoilla:
-- Jurva → Jurva (sama), Ilmajoki → Ilmola, Vaasa → Wasa tai Vasa
-        """)
+| Tuomiokirjat | Yli 7 miljoonaa sivua käräjien pöytäkirjoja | 1600–1900-luvut | ruotsi, suomi |
+| Voudintilit | Ruotsin vallan aikainen verotusaineisto | 1537–1634 | ruotsi |
+| Diplomatarium Fennicum | Keskiaikaiset asiakirjat | n. 1100–1540 | latina, ruotsi |
+""")
+        st.info("Tuomiokirjat ovat 1600–1800-luvuilla pääosin ruotsiksi. Hae myös ruotsinkielisillä "
+                "muodoilla: Ilmajoki → Ilmola, Vaasa → Wasa tai Vasa, Juho → Johan.",
+                icon=":material/translate:")
 
         st.divider()
-        st.markdown("### 🏷️ Automaattiset tägit")
+        st.subheader("Aihetunnisteet")
         st.markdown("""
-Jokainen tulos saa automaattisesti tägit jotka kertovat nopeasti asiakirjan sisällöstä:
+Tuloksiin lisätään tekstin perusteella aihetunnisteita, jotka kertovat nopeasti, mistä asiakirjassa on kyse:
+**Oikeudenkäynti, Kauppa ja velka, Perintö ja omaisuus, Maatalous, Väkivalta, Kirkko ja uskonto.**
 
-| Tägi | Merkitys |
-|---|---|
-| 📅 1800-luku | Asiakirjan vuosisata |
-| 📍 Närpiön | Paikkakunta aineiston nimestä |
-| 🗺️ Pohjanmaa | Maakunta |
-| ⚖️ Oikeudenkäynti | Asiasisältö tekstin perusteella |
-| 💰 Kauppa & velka | Asiasisältö tekstin perusteella |
-| 🏠 Perintö & omaisuus | Asiasisältö tekstin perusteella |
-| 🌾 Maatalous | Asiasisältö tekstin perusteella |
-| 🔪 Väkivalta | Asiasisältö tekstin perusteella |
-| ⛪ Kirkko & uskonto | Asiasisältö tekstin perusteella |
-
-Tägejä voi käyttää filttereinä – valitse yksi tai useampi "Suodata tägien mukaan" -valikosta.
-        """)
+Tunnisteiden, maakunnan ja vuosisadan mukaan voi rajata tuloksia kohdasta *Järjestä ja rajaa tuloksia*.
+Tunnisteet ovat suuntaa antavia, koska ne perustuvat yksittäisiin sanoihin.
+""")
 
         st.divider()
-        st.markdown("### 🎛️ Järjestely ja suodatus")
+        st.subheader("Vinkkejä sukututkimukseen")
         st.markdown("""
-Haun jälkeen tuloksia voi rajata ilman uutta hakua:
-
-- **Järjestys** – Osuvin ensin (oletusarvo), Vanhin ensin, Uusin ensin
-- **Aineisto** – Rajaa yhteen arkistoaineistokokonaisuuteen
-- **Hae tuloksista** – Kirjoita sana joka täytyy löytyä tekstikatkelmasta
-- **Suodata tägien mukaan** – Valitse yksi tai useampi tägi yhdistelmäsuodatukseen
-        """)
-
-        st.divider()
-        st.markdown("### 💡 Vinkkejä sukututkimukseen")
-        st.markdown("""
-- **Kokeile ruotsinkielisiä muotoja** – vanha aineisto on ruotsiksi. Esim. *Juho Mäntylä* esiintyy usein muodossa *Johan Mäntylä* tai *Johan Månttylä*
-- **Käytä jokerimerkkiä epävarmoissa nimissä** – `Mänty*` löytää kaikki muunnokset
-- **Rajaa aikaväli ensin** – jos tiedät henkilön eläneen n. 1780–1830, rajaa siihen
-- **Nimivariaatiot käyttöön aina henkilönimillä** – historialliset nimet vaihtelivat paljon
-- **Aineistofiltteri** on tehokas – jos tiedät pitäjän, valitse sen tuomiokunnan aineisto suoraan
-- **Astia-linkki** vie alkuperäisen digitoidun asiakirjan äärelle – siellä näet käsinkirjoitetun originaalin
-        """)
+- **Kokeile ruotsinkielisiä muotoja.** *Juho Mäntylä* esiintyy usein muodossa *Johan Mäntylä* tai *Johan Månttylä*.
+- **Käytä sanan alkua epävarmoissa nimissä.** `Mänty*` löytää kaikki muunnokset.
+- **Rajaa aikaväli.** Jos tiedät henkilön eläneen n. 1780–1830, rajaa haku siihen.
+- **Valitse tuomiokunta**, jos tiedät pitäjän. Valitse ensin maakunta sivupalkista.
+- **Avaa alkuperäinen asiakirja.** Linkki vie Astiaan, jossa näet käsinkirjoitetun sivun. Koneellisesti tunnistettu teksti sisältää virheitä.
+""")
 
         st.divider()
-        st.markdown("### 🔑 API-avain")
-        st.markdown("Ota yhteyttä Kansallisarkistoon: **sanna.joska@kansallisarkisto.fi**")
+        st.subheader("API-avain")
+        st.markdown("Haku käyttää Kansallisarkiston hakurajapintaa, johon tarvitaan avain. "
+                    "Avainta voi pyytää Kansallisarkiston asiakaspalvelusta ([kansallisarkisto.fi](https://kansallisarkisto.fi)).")
 
 
 if __name__ == "__main__":
