@@ -696,17 +696,17 @@ def hae_gemini_avain():
     return os.environ.get("GEMINI_API_KEY")
 
 
-def selita_asiakirja_geminilla(asiakirja_teksti: str) -> str:
-    """Selittää asiakirjan tekstin Google Gemini Flash -mallilla."""
-    import requests as req
+# Mallit järjestyksessä. Ilmaistason päiväraja (RPD) projektilla 11/2026:
+#   gemini-3.5-flash-lite 500/pv, gemini-3.1-flash-lite 500/pv, gemini-2.5-flash-lite 20/pv.
+# Rajat ovat mallikohtaisia, joten jos yksi on täynnä (429) tai poistunut käytöstä (404),
+# kokeillaan seuraavaa. Rajat näkee AI Studiosta: Rate Limit -sivu.
+GEMINI_MALLIT = [
+    ("gemini-3.5-flash-lite", "Gemini 3.5 Flash-Lite"),
+    ("gemini-3.1-flash-lite", "Gemini 3.1 Flash-Lite"),
+    ("gemini-2.5-flash-lite", "Gemini 2.5 Flash-Lite"),
+]
 
-    gemini_avain = hae_gemini_avain()
-    if not gemini_avain:
-        return "⚠️ Gemini API-avain puuttuu. Lisää GEMINI_API_KEY Streamlit Secretsiin."
-
-    katkelma = asiakirja_teksti[:3000]
-
-    prompt = f"""Olet avustaja joka selittää Kansallisarkiston historiallisia asiakirjoja selkeällä suomen kielellä.
+SELITYS_PROMPT = """Olet avustaja joka selittää Kansallisarkiston historiallisia asiakirjoja selkeällä suomen kielellä.
 
 Vastaa ilman otsikkoa tässä järjestyksessä:
 
@@ -721,37 +721,61 @@ Vastaa ilman otsikkoa tässä järjestyksessä:
 Asiakirja:
 {katkelma}"""
 
-    # Avain lähetetään otsakkeessa eikä URL:ssa, jotta se ei päädy lokeihin tai virheilmoituksiin
-    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent"
-    otsakkeet = {"x-goog-api-key": gemini_avain, "Content-Type": "application/json"}
 
+class GeminiVirhe(Exception):
+    def __init__(self, koodi, viesti):
+        super().__init__(viesti)
+        self.koodi = koodi
+
+
+@st.cache_data(ttl=60 * 60 * 24 * 30, max_entries=1000, show_spinner=False)
+def _selitys_valimuistista(katkelma, _avain):
+    """Sama asiakirja selitetään vain kerran: tulos jaetaan kaikille käyttäjille 30 päiväksi.
+    Vain onnistuneet selitykset tallentuvat, koska virhe keskeyttää funktion.
+    Alaviivalla alkavaa avainta ei käytetä välimuistin tunnisteena."""
     payload = {
-        "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {
-            "maxOutputTokens": 1000,
-            "temperature": 0.2
-        }
+        "contents": [{"parts": [{"text": SELITYS_PROMPT.format(katkelma=katkelma)}]}],
+        # Gemini 3.x -mallit toimivat parhaiten oletuslämpötilalla; Flash-Lite ajattelee oletuksena minimaalisesti.
+        "generationConfig": {"maxOutputTokens": 1000},
     }
+    viimeisin = None
+    for malli, nimi in GEMINI_MALLIT:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{malli}:generateContent"
+        try:
+            resp = requests.post(url, headers={"x-goog-api-key": _avain, "Content-Type": "application/json"},
+                                 json=payload, timeout=30)
+        except requests.exceptions.RequestException as e:
+            raise GeminiVirhe(0, f"Yhteys tekoälypalveluun epäonnistui ({type(e).__name__}).")
+        if resp.status_code in (404, 429, 503):
+            viimeisin = resp.status_code  # malli täynnä, ylikuormittunut tai poistunut: kokeillaan seuraavaa
+            continue
+        if resp.status_code in (400, 401, 403):
+            raise GeminiVirhe(resp.status_code, "Gemini API-avain virheellinen. Tarkista GEMINI_API_KEY.")
+        if not resp.ok:
+            raise GeminiVirhe(resp.status_code, f"Tekoälypalvelun virhe {resp.status_code}.")
+        osat = (resp.json().get("candidates") or [{}])[0].get("content", {}).get("parts", [])
+        teksti = "".join(o.get("text", "") for o in osat if not o.get("thought")).strip()
+        if not teksti:
+            raise GeminiVirhe(200, "Tekoäly palautti tyhjän vastauksen tai sisältö suodatettiin.")
+        return teksti, nimi
+    if viimeisin == 429:
+        raise GeminiVirhe(429, "Päivän ilmaiset tekoälyselitykset on käytetty. Kiintiö nollautuu klo 10 Suomen aikaa.")
+    raise GeminiVirhe(viimeisin or 0, "Tekoälypalvelu ei juuri nyt vastaa. Yritä hetken päästä uudelleen.")
 
+
+def selita_asiakirja_geminilla(asiakirja_teksti: str):
+    """Palauttaa (selitys, mallin nimi) tai (virheviesti, None)."""
+    gemini_avain = hae_gemini_avain()
+    if not gemini_avain:
+        return "Gemini API-avain puuttuu. Lisää GEMINI_API_KEY Streamlitin Secrets-asetuksiin.", None
+    # Normalisoidaan välilyönnit, jotta sama asiakirja osuu välimuistiin
+    katkelma = " ".join(asiakirja_teksti.split())[:3000]
     try:
-        resp = req.post(url, headers=otsakkeet, json=payload, timeout=30)
-        resp.raise_for_status()
-        data = resp.json()
-        candidates = data.get("candidates", [])
-        if candidates:
-            content_block = candidates[0].get("content", {})
-            parts = content_block.get("parts", [])
-            if parts:
-                return parts[0].get("text", "⚠️ Vastausteksti oli tyhjä.")
-        return "⚠️ Gemini palautti tyhjän vastauksen tai sisältö suodatettiin."
-    except req.exceptions.HTTPError as e:
-        if e.response is not None and e.response.status_code == 429:
-            return "⚠️ Googlen ilmaisraja ylittyi. Odota hetki ja yritä uudelleen."
-        if e.response is not None and e.response.status_code == 400:
-            return "⚠️ Gemini API-avain virheellinen. Tarkista GEMINI_API_KEY."
-        return f"⚠️ API-virhe: {e.response.status_code if e.response else 'Tuntematon'}"
-    except Exception as e:
-        return f"⚠️ Selitys epäonnistui ({type(e).__name__}). Yritä hetken päästä uudelleen."
+        return _selitys_valimuistista(katkelma, gemini_avain)
+    except GeminiVirhe as e:
+        return str(e), None
+
+
 def turvallinen_katkelma(teksti):
     """Escapataan asiakirjan teksti ja muutetaan ES:n korostusmerkit <mark>-tageiksi."""
     teksti = html.escape(teksti or "")
@@ -844,8 +868,14 @@ def nayta_tulos(tulos, idx, indeksi_avain):
                 st.warning("Asiakirjassa ei ole tekstiä, jota selittää.")
 
         if selitys_avain in st.session_state:
-            st.markdown("**Tekoälyn selitys** (tarkista aina alkuperäisestä):")
-            st.info(st.session_state[selitys_avain])
+            selitys, malli = st.session_state[selitys_avain]
+            if malli:
+                st.markdown("**Tekoälyn selitys** (tarkista aina alkuperäisestä):")
+                st.info(selitys)
+                st.caption(f"Selityksen teki {malli}.")
+            else:
+                st.warning(selitys)
+                del st.session_state[selitys_avain]  # virhe: sallitaan uusi yritys
 
 
 def suodata_ja_jarjesta(tulokset, indeksi_avain, jarjestys, aineisto_filtteri, valitut_tagit, teksti_filtteri=""):
