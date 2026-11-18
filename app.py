@@ -1163,6 +1163,20 @@ def main():
         hakusana = (st.session_state.get("hakusana") or "").strip()
         aja = lahetetty or st.session_state.pop("aja_haku", False)
 
+        # Sivupalkin rajaukset selkokielellä, jotta tuloksista näkee mitä haettiin
+        rajaukset = [f"vuodet {vuosi_alku}–{vuosi_loppu}"]
+        if maakunta_filtteri:
+            rajaukset.append(maakunta_filtteri)
+        if aineisto_tarkka:
+            rajaukset.append(aineisto_tarkka)
+        if teksti_filtteri_es and teksti_filtteri_es.strip():
+            rajaukset.append(f"aihe: {teksti_filtteri_es.strip()}")
+        nykyiset_ehdot = (hakusana, indeksi_avain, vuosi_alku, vuosi_loppu, maakunta_filtteri,
+                          aineisto_tarkka, (liittyva_hakusana or "").strip(),
+                          (teksti_filtteri_es or "").strip(), tulosten_maara,
+                          st.session_state["nimivariaatiot"], st.session_state["sumea"],
+                          st.session_state["laaja"])
+
         if aja:
             # Uusi haku korvaa aina edellisen, myös kun osumia ei löydy
             st.session_state.pop("hakutulos", None)
@@ -1183,7 +1197,9 @@ def main():
                 if resp:
                     st.session_state["hakutulos"] = {
                         "hakusana": hakusana,
-                        "kuvaus": kuvaa_haku(hakusana, liittyva_hakusana, nimivariaatiot, sumea, laaja).replace("  \n", " · "),
+                        "kuvaus": " · ".join([kuvaa_haku(hakusana, liittyva_hakusana, nimivariaatiot, sumea, laaja)
+                                              .replace("  \n", " · ")] + rajaukset),
+                        "ehdot": nykyiset_ehdot,
                         "osumia": resp.get("hits", {}).get("total", {}).get("value", 0),
                         "tulokset": resp.get("hits", {}).get("hits", []),
                         "resp": resp,
@@ -1192,6 +1208,12 @@ def main():
                     }
 
         haku = st.session_state.get("hakutulos")
+        if haku and haku.get("ehdot") != nykyiset_ehdot:
+            # Käyttäjä on muuttanut hakua tai rajauksia: kerrotaan, ettei alla oleva vielä vastaa niitä
+            ilmoitus, painike = st.columns([4, 1], vertical_alignment="center")
+            ilmoitus.info("Muutit hakuehtoja. Alla näkyvät vielä edellisen haun tulokset.",
+                          icon=":material/update:")
+            painike.button("Päivitä haku", type="primary", on_click=_aseta_ja_hae, width="stretch")
         if haku and haku["osumia"] > 0:
             nayta_tulokset(haku)
         elif haku:
