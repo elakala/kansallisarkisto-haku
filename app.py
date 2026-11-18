@@ -886,6 +886,10 @@ def suodata_ja_jarjesta(tulokset, indeksi_avain, jarjestys, aineisto_filtteri, v
 TYYLIT = """
 <style>
 [data-testid="stMainBlockContainer"] { max-width: 1240px; }
+[data-testid="stImageCaption"] { font-size: 0.85rem; color: #5f5850; }
+[data-testid="stImage"] img { border-radius: 8px; }
+[data-testid="stAlertContainer"] { background: #ece9e3 !important; color: #24211e !important; }
+[data-testid="stAlertContainer"] p, [data-testid="stAlertContainer"] [data-testid="stIconMaterial"] { color: #24211e !important; }
 /* Hakukenttä: isompi kuin muut kentät, koska se on sivun pääasia */
 div[data-testid="stForm"] input[type="text"] { font-size: 1.15rem; min-height: 3rem; }
 div[data-testid="stForm"] { padding: 0; border: none; }
@@ -893,8 +897,6 @@ div[data-testid="stForm"] [data-testid="InputInstructions"] { display: none; }
 
 .banneri { display: flex; min-height: 220px; border-radius: 10px; overflow: hidden;
   background-size: cover; background-position: center 40%; margin-bottom: 1.5rem; }
-.banneri-lahde { font-size: 0.8rem; color: #5f5850; margin: -1.1rem 0 1rem 0; }
-.banneri-lahde a { color: inherit !important; text-underline-offset: 2px; }
 .banneri-sisus { flex: 1; display: flex; flex-direction: column;
   justify-content: flex-end; padding: 28px 36px;
   background: linear-gradient(90deg, rgba(28,25,22,0.80) 0%, rgba(28,25,22,0.48) 55%, rgba(28,25,22,0.15) 100%); }
@@ -921,23 +923,31 @@ div[data-testid="stForm"] [data-testid="InputInstructions"] { display: none; }
 </style>
 """
 
-# Bannerikuvat vaihtuvat satunnaisesti istunnoittain. "lahde" näytetään kuvan alla,
-# kun kuva on arkistosta (Public Domain -kuvissakin Museovirasto pyytää mainitsemaan lähteen).
+# Bannerikuvat vaihtuvat satunnaisesti istunnoittain. Kuvien lähteet: Ohjeet-välilehden Kuvat-osio.
 BANNERIT = [
-    {
-        "url": ("https://raw.githubusercontent.com/elakala/kansallisarkisto-haku/main/"
-                "ChatGPT%20Image%2022.5.2026%20klo%2018.06.27.png"),
-        "kohta": "center 40%",
-        "lahde": None,
-    },
-    {
-        "url": ("https://museovirasto.finna.fi/Cover/Show?source=Solr&size=large"
-                "&id=museovirasto.c030cad0-0a03-41ee-b0d8-fcb3d61fd555"),
-        "kohta": "center 62%",
-        "lahde": ("Peltoaukeama Seinäjoen ja Ilmajoen Munakan kylän välillä, 1913. "
-                  "Museovirasto, Historian kuvakokoelma, HK8134:2412. Public Domain."),
-        "lahde_url": "https://museovirasto.finna.fi/Record/museovirasto.c030cad0-0a03-41ee-b0d8-fcb3d61fd555",
-    },
+    {"url": ("https://raw.githubusercontent.com/elakala/kansallisarkisto-haku/main/"
+             "ChatGPT%20Image%2022.5.2026%20klo%2018.06.27.png"), "kohta": "center 40%"},
+    {"url": ("https://museovirasto.finna.fi/Cover/Show?source=Solr&size=large"
+             "&id=museovirasto.c030cad0-0a03-41ee-b0d8-fcb3d61fd555"), "kohta": "center 62%"},
+    {"url": "app/static/kuvat/heinanteko.jpg", "kohta": "center 64%"},
+    {"url": "app/static/kuvat/laituri-pohjanmaa.jpg", "kohta": "center 56%"},
+    {"url": "app/static/kuvat/nainen-ja-lehma.jpg", "kohta": "center 10%"},
+]
+
+# Lähdetiedot. Museovirasto pyytää mainitsemaan lähteen myös Public Domain -kuvissa.
+KUVALAHTEET = [
+    ("Peltoaukeama Seinäjoen ja Ilmajoen Munakan kylän välillä, 1913",
+     "Museovirasto, Historian kuvakokoelma, HK8134:2412. Public Domain.",
+     "https://museovirasto.finna.fi/Record/museovirasto.c030cad0-0a03-41ee-b0d8-fcb3d61fd555"),
+    ("Kyrönjoen Ritaalankosken oikea haara, Isokyrö, 1912",
+     "Museovirasto, Historian kuvakokoelma, HK8134:3316. Public Domain.",
+     "https://museovirasto.finna.fi/Record/museovirasto.6bbfffc5-e4b2-49ca-8a35-d514a443cca8"),
+    ("Perhe talon edustalla Uudenkaarlepyyn seudulla, 1900–1906",
+     "Kuvaaja J. W. Schalin. Museovirasto, Historian kuvakokoelma, HK10019:53. Public Domain.",
+     "https://museovirasto.finna.fi/Record/museovirasto.622f951c-eb53-4b99-bae0-c47309543d79"),
+    ("Laituri ja purjevene, Pohjanmaa",
+     "Kuvaaja J. W. Schalin. Museovirasto, Historian kuvakokoelma, HK10019:131. Public Domain.",
+     "https://museovirasto.finna.fi/Record/museovirasto.6496670a-90ff-4c8c-b410-98ca4e93edb5"),
 ]
 
 ESIMERKKIHAUT = ["Mäntylä", "Juho Mäntylä", "Mänty*"]
@@ -1059,10 +1069,6 @@ def main():
           </div>
         </div>
     """, unsafe_allow_html=True)
-    if banneri["lahde"]:
-        st.markdown(f"<p class='banneri-lahde'>Kuva: <a href='{banneri['lahde_url']}' target='_blank' "
-                    f"rel='noopener'>{html.escape(banneri['lahde'])}</a></p>", unsafe_allow_html=True)
-
     api_avain = hae_api_avain()
 
     # ── Päähaku: yksi kenttä, Enter hakee ──────────────────────────────────────
@@ -1184,17 +1190,22 @@ def main():
         elif haku:
             nayta_nollatulos(haku)
         elif not aja:
-            st.markdown(
+            vasen, oikea = st.columns([3, 2], gap="large")
+            with oikea:
+                st.image("static/kuvat/perhe-uusikaarlepyy.jpg",
+                         caption="Perhe talonsa edustalla Uudenkaarlepyyn seudulla 1900-luvun alussa.")
+            with vasen:
+              st.markdown(
                 "<p class='johdanto'>Käräjien pöytäkirjoissa mainitaan talollisia, torppareita, "
                 "leskiä ja lapsia: maakauppoja, perinnönjakoja, velkoja ja riitoja. Kirjoita hakuun "
                 "sukunimi tai talon nimi, niin näet asiakirjat, joissa se esiintyy, ja pääset "
                 "alkuperäiseen käsinkirjoitettuun sivuun.</p>",
                 unsafe_allow_html=True)
-            st.markdown("**Kokeile esimerkkihakua:**")
-            sarakkeet = st.columns(len(ESIMERKKIHAUT) + 3)
-            for sarake, esim in zip(sarakkeet, ESIMERKKIHAUT):
-                sarake.button(esim, on_click=_aseta_ja_hae, kwargs={"hakusana": esim},
-                              width="stretch")
+              st.markdown("**Kokeile esimerkkihakua:**")
+              sarakkeet = st.columns(len(ESIMERKKIHAUT))
+              for sarake, esim in zip(sarakkeet, ESIMERKKIHAUT):
+                  sarake.button(esim, on_click=_aseta_ja_hae, kwargs={"hakusana": esim},
+                                width="stretch")
 
     with tab_ohje:
         st.subheader("Näin haet")
@@ -1229,16 +1240,21 @@ def main():
 
         st.divider()
         st.subheader("Aineistot")
-        st.markdown("""
+        a_vasen, a_oikea = st.columns([3, 2], gap="large")
+        with a_oikea:
+            st.image("static/kuvat/ritaalankoski-1912.jpg",
+                     caption="Kyrönjoen Ritaalankoski, Isokyrö, 1912.")
+        with a_vasen:
+          st.markdown("""
 | Aineisto | Sisältö | Aikaväli | Kieli |
 |---|---|---|---|
 | Tuomiokirjat | Yli 7 miljoonaa sivua käräjien pöytäkirjoja | 1600–1900-luvut | ruotsi, suomi |
 | Voudintilit | Ruotsin vallan aikainen verotusaineisto | 1537–1634 | ruotsi |
 | Diplomatarium Fennicum | Keskiaikaiset asiakirjat | n. 1100–1540 | latina, ruotsi |
 """)
-        st.info("Tuomiokirjat ovat 1600–1800-luvuilla pääosin ruotsiksi. Hae myös ruotsinkielisillä "
-                "muodoilla: Ilmajoki → Ilmola, Vaasa → Wasa tai Vasa, Juho → Johan.",
-                icon=":material/translate:")
+          st.info("Tuomiokirjat ovat 1600–1800-luvuilla pääosin ruotsiksi. Hae myös ruotsinkielisillä "
+                  "muodoilla: Ilmajoki → Ilmola, Vaasa → Wasa tai Vasa, Juho → Johan.",
+                  icon=":material/translate:")
 
         st.divider()
         st.subheader("Aihetunnisteet")
@@ -1252,13 +1268,21 @@ Tunnisteet ovat suuntaa antavia, koska ne perustuvat yksittäisiin sanoihin.
 
         st.divider()
         st.subheader("Vinkkejä sukututkimukseen")
-        st.markdown("""
+        v_vasen, v_oikea = st.columns([3, 1.4], gap="large")
+        with v_oikea:
+            st.image("static/kuvat/poika-haravoi-hartola.jpg", caption="Kesä Hartolassa.")
+        with v_vasen:
+          st.markdown("""
 - **Kokeile ruotsinkielisiä muotoja.** *Juho Mäntylä* esiintyy usein muodossa *Johan Mäntylä* tai *Johan Månttylä*.
 - **Käytä sanan alkua epävarmoissa nimissä.** `Mänty*` löytää kaikki muunnokset.
 - **Rajaa aikaväli.** Jos tiedät henkilön eläneen n. 1780–1830, rajaa haku siihen.
 - **Valitse tuomiokunta**, jos tiedät pitäjän. Valitse ensin maakunta sivupalkista.
 - **Avaa alkuperäinen asiakirja.** Linkki vie Astiaan, jossa näet käsinkirjoitetun sivun. Koneellisesti tunnistettu teksti sisältää virheitä.
 """)
+
+        st.divider()
+        st.subheader("Kuvat")
+        st.markdown("\n".join(f"- [{nimi}]({url}). {lahde}" for nimi, lahde, url in KUVALAHTEET))
 
         st.divider()
         st.subheader("API-avain")

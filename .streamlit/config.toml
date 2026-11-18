@@ -4,6 +4,10 @@ primaryColor = "#4b4038"
 backgroundColor = "#f5f4f1"
 secondaryBackgroundColor = "#e9e6e0"
 textColor = "#24211e"
+linkColor = "#4b4038"
 baseFontSize = 17
 font = "Atkinson Hyperlegible:https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&display=swap, sans-serif"
 headingFont = "Atkinson Hyperlegible:https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@700&display=swap, sans-serif"
+
+[server]
+enableStaticServing = true
