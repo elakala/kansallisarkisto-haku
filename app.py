@@ -819,12 +819,15 @@ def nayta_tulos(tulos, idx, indeksi_avain):
 
     with st.expander("Koko teksti ja tekoälyselitys", expanded=False):
         if indeksi_avain != "df":
-            st.caption(f"**Aineisto:** {src.get('aineistokokonaisuus', '–')}  \n"
-                       f"**Pääsarja:** {src.get('pääsarja', '–')}  \n"
-                       f"**Arkistoyksikkö:** {src.get('arkistoyksikkö', '–')}")
+            tiedot = [("Aineisto", src.get("aineistokokonaisuus")), ("Pääsarja", src.get("pääsarja")),
+                      ("Arkistoyksikkö", src.get("arkistoyksikkö"))]
         else:
-            st.caption(f"**Antopaikka:** {src.get('issuingplace', '–')} ({src.get('issuingplacecountry', '')})  \n"
-                       f"**Kieli:** {src.get('language', '–')}")
+            maa = src.get("issuingplacecountry")
+            paikka = src.get("issuingplace") or "–"
+            tiedot = [("Antopaikka", f"{paikka} ({maa})" if maa else paikka), ("Kieli", src.get("language"))]
+        st.markdown("<dl class='lisatiedot'>" + "".join(
+            f"<dt>{html.escape(k)}</dt><dd>{html.escape(str(v or '–'))}</dd>" for k, v in tiedot)
+            + "</dl>", unsafe_allow_html=True)
 
         koko_teksti = src.get(teksti_kentta, "") or ""
         if koko_teksti:
@@ -887,6 +890,10 @@ TYYLIT = """
 <style>
 [data-testid="stMainBlockContainer"] { max-width: 1240px; }
 [data-testid="stImageCaption"] { font-size: 0.85rem; color: #5f5850; }
+[data-testid="stCaptionContainer"], [data-testid="stCaptionContainer"] p { color: #5f5850 !important; }
+.lisatiedot { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; margin: 0 0 14px 0; font-size: 0.95rem; }
+.lisatiedot dt { color: #5f5850; font-weight: 700; }
+.lisatiedot dd { margin: 0; color: #24211e; }
 [data-testid="stImage"] img { border-radius: 8px; }
 [data-testid="stAlertContainer"] { background: #ece9e3 !important; color: #24211e !important; }
 [data-testid="stAlertContainer"] p, [data-testid="stAlertContainer"] [data-testid="stIconMaterial"] { color: #24211e !important; }
