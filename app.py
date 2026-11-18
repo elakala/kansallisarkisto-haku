@@ -616,7 +616,7 @@ def tee_haku(api_avain, indeksi, kysely):
     return None
 
 
-PAAVARI = "#8a3b22"  # sama kuin teeman primaryColor (.streamlit/config.toml)
+PAAVARI = "#4b4038"  # sama kuin teeman primaryColor (.streamlit/config.toml)
 
 
 def muotoile_luku(n):
@@ -681,7 +681,7 @@ def nayta_visualisoinnit(resp):
         ]).sort_values("Osumia", ascending=True)
         fig2 = px.bar(df_a, x="Osumia", y="Aineisto", orientation="h",
                       title="Osumat aineistokokonaisuuksittain",
-                      color_discrete_sequence=["#b58a5a"])
+                      color_discrete_sequence=["#b7863a"])
         st.plotly_chart(_tyyli_kaavio(fig2, max(300, len(agg_aineistot) * 32)),
                         width="stretch")
 
@@ -894,27 +894,27 @@ div[data-testid="stForm"] [data-testid="InputInstructions"] { display: none; }
   background-size: cover; background-position: center 40%; margin-bottom: 1.5rem; }
 .banneri-sisus { flex: 1; display: flex; flex-direction: column;
   justify-content: flex-end; padding: 28px 36px;
-  background: linear-gradient(90deg, rgba(25,18,12,0.78) 0%, rgba(25,18,12,0.45) 55%, rgba(25,18,12,0.15) 100%); }
-.banneri h1 { margin: 0; padding: 0; color: #fff; font-family: "Source Serif Pro", "Source Serif 4", Georgia, serif;
+  background: linear-gradient(90deg, rgba(28,25,22,0.80) 0%, rgba(28,25,22,0.48) 55%, rgba(28,25,22,0.15) 100%); }
+.banneri h1 { margin: 0; padding: 0; color: #fff; font-family: "Atkinson Hyperlegible", sans-serif;
   font-size: clamp(1.8rem, 4vw, 2.6rem); font-weight: 700; line-height: 1.15; letter-spacing: -0.01em; }
-.banneri p { margin: 8px 0 0 0; color: #f6efe4; font-size: 1.08rem; max-width: 60ch; line-height: 1.45; }
+.banneri p { margin: 8px 0 0 0; color: #f1eee9; font-size: 1.08rem; max-width: 60ch; line-height: 1.45; }
 
-.johdanto { font-size: 1.05rem; line-height: 1.6; max-width: 68ch; color: #4a3f35; }
+.johdanto { font-size: 1.05rem; line-height: 1.6; max-width: 68ch; color: #3d3832; }
 
-.tulos { padding: 18px 0 10px 0; border-top: 1px solid #e6dccd; }
+.tulos { padding: 18px 0 10px 0; border-top: 1px solid #dcd8d0; }
 .tulos-otsikko { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; flex-wrap: wrap; }
-.tulos-vuosi { font-size: 1.25rem; font-weight: 700; color: #2d2620; font-variant-numeric: tabular-nums; }
-.tulos-paikka { font-size: 1.1rem; color: #2d2620; }
-.tulos-linkki { font-size: 0.95rem; white-space: nowrap; color: #8a3b22 !important; text-underline-offset: 3px; }
-.tulos-lahde { font-size: 0.9rem; color: #6b5d50; margin-top: 2px; }
+.tulos-vuosi { font-size: 1.25rem; font-weight: 700; color: #24211e; font-variant-numeric: tabular-nums; }
+.tulos-paikka { font-size: 1.1rem; color: #24211e; }
+.tulos-linkki { font-size: 0.95rem; white-space: nowrap; color: #4b4038 !important; text-underline-offset: 3px; }
+.tulos-lahde { font-size: 0.9rem; color: #5f5850; margin-top: 2px; }
 .tagirivi { margin-top: 8px; }
 .tagi { display: inline-block; padding: 2px 10px; margin: 0 6px 4px 0; border-radius: 999px;
-  background: #efe5d6; color: #5a4632; font-size: 0.85rem; }
-.katkelma { background: #f6f0e7; padding: 10px 14px; border-radius: 6px; margin-top: 10px;
-  font-size: 0.98rem; line-height: 1.6; color: #3a3129; max-width: 80ch; }
-.katkelma mark, .koko-teksti mark { background: #f2d58f; color: inherit; padding: 0 2px; border-radius: 2px; }
-.koko-teksti { font-size: 0.95rem; line-height: 1.7; color: #3a3129; max-height: 420px; overflow-y: auto; }
-::selection { background: #f2d58f; color: #2d2620; }
+  background: #f3e6c8; color: #6e4c12; font-size: 0.85rem; }
+.katkelma { background: #ece9e3; padding: 10px 14px; border-radius: 6px; margin-top: 10px;
+  font-size: 0.98rem; line-height: 1.6; color: #2f2b27; max-width: 80ch; }
+.katkelma mark, .koko-teksti mark { background: #f6d58e; color: inherit; padding: 0 2px; border-radius: 2px; }
+.koko-teksti { font-size: 0.95rem; line-height: 1.7; color: #2f2b27; max-height: 420px; overflow-y: auto; }
+::selection { background: #f6d58e; color: #24211e; }
 </style>
 """
 
