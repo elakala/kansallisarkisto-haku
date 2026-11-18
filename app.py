@@ -1019,10 +1019,11 @@ div[data-testid="stForm"] [data-testid="InputInstructions"] { display: none; }
 [class*="st-key-tuloskortti_"] { background: #fdfcfa; border: 1px solid #dcd8d0; border-radius: 12px;
   padding: 18px 22px 14px 22px; margin-bottom: 18px; box-shadow: 0 1px 2px rgba(36,33,30,0.06), 0 4px 12px rgba(36,33,30,0.04); }
 .tulos { padding: 0; }
-.st-key-muutosilmoitus { background: #e8e7f6; border: 1px solid #b9b5e0; border-radius: 10px;
+.st-key-muutosilmoitus { background: #cfc5e5; border: 1px solid #b2a5d3; border-radius: 10px;
   padding: 12px 16px; margin: 4px 0 18px 0; gap: 16px; position: sticky; top: 0.5rem; z-index: 5; }
-.st-key-muutosilmoitus p { color: #2e2a5c; margin: 0; }
-.st-key-muutosilmoitus button { background: #4a438f !important; border-color: #4a438f !important; color: #fff !important; flex-shrink: 0; }
+/* Digital Lavender (WGSN/Coloro 2023, n. #CFC5E5) */
+.st-key-muutosilmoitus p { color: #2c2540; margin: 0; }
+.st-key-muutosilmoitus button { background: #463c5e !important; border-color: #463c5e !important; color: #fff !important; flex-shrink: 0; }
 .st-key-muutosilmoitus button p { color: #fff !important; }
 .tulos-otsikko { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; flex-wrap: wrap; }
 .tulos-vuosi { font-size: 1.25rem; font-weight: 700; color: #24211e; font-variant-numeric: tabular-nums; }
