@@ -10,7 +10,6 @@ import requests
 import os
 import re
 import html
-import random
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 import json
@@ -1006,14 +1005,31 @@ div[data-testid="stForm"] input[type="text"] { font-size: 1.15rem; min-height: 3
 div[data-testid="stForm"] { padding: 0; border: none; }
 div[data-testid="stForm"] [data-testid="InputInstructions"] { display: none; }
 
-.banneri { display: flex; min-height: 220px; border-radius: 10px; overflow: hidden;
-  background-size: cover; background-position: center 40%; margin-bottom: 1.5rem; }
-.banneri-sisus { flex: 1; display: flex; flex-direction: column;
-  justify-content: flex-end; padding: 28px 36px;
-  background: linear-gradient(90deg, rgba(28,25,22,0.80) 0%, rgba(28,25,22,0.48) 55%, rgba(28,25,22,0.15) 100%); }
-.banneri h1 { margin: 0; padding: 0; color: #fff; font-family: "Atkinson Hyperlegible", sans-serif;
-  font-size: clamp(1.8rem, 4vw, 2.6rem); font-weight: 700; line-height: 1.15; letter-spacing: -0.01em; }
-.banneri p { margin: 8px 0 0 0; color: #f1eee9; font-size: 1.08rem; max-width: 60ch; line-height: 1.45; }
+.hero { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); align-items: center; gap: 40px;
+  background: #211d1a; border-radius: 14px; min-height: 330px; padding: 0 48px 0 32px; margin-bottom: 1.75rem; overflow: hidden; }
+.kollaasi { position: relative; height: 330px; }
+.kollaasi img { position: absolute; object-fit: cover; border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.35); outline: 1px solid rgba(255,255,255,0.08); }
+.k-perhe { left: 0; top: 40px; width: 54%; height: 180px; object-position: center 45%; }
+.k-poika { left: 40%; top: 108px; width: 24%; height: 190px; object-position: center 20%; z-index: 2; }
+.k-heina { left: 58%; top: 24px; width: 42%; height: 128px; object-position: center 60%; }
+.k-kortti { position: absolute; left: 55%; top: 168px; width: 45%; z-index: 3; background: #fdfcfa; border-radius: 10px;
+  padding: 10px 12px; box-shadow: 0 10px 28px rgba(0,0,0,0.4); font-size: 0.78rem; color: #24211e; line-height: 1.4; }
+.k-vuosi { margin-bottom: 4px; }
+.k-ote { background: #ece9e3; border-radius: 5px; padding: 5px 7px; color: #3d3832; }
+.k-ote mark { background: #f6d58e; color: inherit; padding: 0 2px; }
+.k-selitys { margin-top: 6px; background: #fbf1dc; border: 1px solid #ecd6a6; border-radius: 6px; padding: 4px 7px;
+  color: #6e4c12; font-weight: 700; }
+.hero-teksti h1 { margin: 0; padding: 0; color: #fff; font-family: "Atkinson Hyperlegible", sans-serif;
+  font-size: clamp(1.6rem, 2.5vw, 2.6rem); font-weight: 700; line-height: 1.12; letter-spacing: -0.015em;
+  text-wrap: balance; word-break: keep-all; hyphens: manual; }
+.hero-teksti p { margin: 14px 0 0 0; color: #d9d3cb; font-size: 1.05rem; line-height: 1.55; max-width: 46ch; }
+.hero-kehys { container-type: inline-size; }
+@container (max-width: 720px) { .k-kortti { display: none; } .k-poika { left: 44%; } }
+@container (max-width: 600px) {
+  .hero { grid-template-columns: 1fr; padding: 28px 24px; min-height: 0; gap: 0; }
+  .kollaasi { display: none; }
+}
 
 .johdanto { font-size: 1.05rem; line-height: 1.6; max-width: 68ch; color: #3d3832; }
 
@@ -1059,22 +1075,8 @@ div[data-testid="stForm"] [data-testid="InputInstructions"] { display: none; }
 </style>
 """
 
-# Bannerikuvat vaihtuvat satunnaisesti istunnoittain. Kuvien lähteet: Ohjeet-välilehden Kuvat-osio.
-BANNERIT = [
-    {"url": ("https://raw.githubusercontent.com/elakala/kansallisarkisto-haku/main/"
-             "ChatGPT%20Image%2022.5.2026%20klo%2018.06.27.png"), "kohta": "center 40%"},
-    {"url": ("https://museovirasto.finna.fi/Cover/Show?source=Solr&size=large"
-             "&id=museovirasto.c030cad0-0a03-41ee-b0d8-fcb3d61fd555"), "kohta": "center 62%"},
-    {"url": "app/static/kuvat/heinanteko.jpg", "kohta": "center 64%"},
-    {"url": "app/static/kuvat/laituri-pohjanmaa.jpg", "kohta": "center 56%"},
-    {"url": "app/static/kuvat/nainen-ja-lehma.jpg", "kohta": "center 10%"},
-]
-
 # Lähdetiedot. Museovirasto pyytää mainitsemaan lähteen myös Public Domain -kuvissa.
 KUVALAHTEET = [
-    ("Peltoaukeama Seinäjoen ja Ilmajoen Munakan kylän välillä, 1913",
-     "Museovirasto, Historian kuvakokoelma, HK8134:2412. Public Domain.",
-     "https://museovirasto.finna.fi/Record/museovirasto.c030cad0-0a03-41ee-b0d8-fcb3d61fd555"),
     ("Kyrönjoen Ritaalankosken oikea haara, Isokyrö, 1912",
      "Museovirasto, Historian kuvakokoelma, HK8134:3316. Public Domain.",
      "https://museovirasto.finna.fi/Record/museovirasto.6bbfffc5-e4b2-49ca-8a35-d514a443cca8"),
@@ -1198,17 +1200,25 @@ def main():
         st.session_state.setdefault(avain, oletus)
 
     # ── Banneri ────────────────────────────────────────────────────────────────
-    if "banneri" not in st.session_state:
-        st.session_state["banneri"] = random.randrange(len(BANNERIT))
-    banneri = BANNERIT[st.session_state["banneri"]]
-    st.markdown(f"""
-        <div class="banneri" style="background-image:url('{banneri["url"]}');background-position:{banneri["kohta"]}">
-          <div class="banneri-sisus">
-            <h1>Kansallisarkiston Sisältöhaku</h1>
-            <p>Etsi esivanhempiasi Kansallisarkiston digitoiduista tuomiokirjoista,
-               voudintileistä ja keskiaikaisista asiakirjoista.</p>
+    # ── Hero: kuvakollaasi Museoviraston kuvista + esimerkkituloskortti ───────
+    st.markdown("""
+        <div class="hero-kehys"><section class="hero" aria-label="Kansallisarkiston Sisältöhaku">
+          <div class="kollaasi" aria-hidden="true">
+            <img class="k-perhe" src="app/static/kuvat/perhe-uusikaarlepyy.jpg" alt="">
+            <img class="k-poika" src="app/static/kuvat/poika-haravoi-hartola.jpg" alt="">
+            <img class="k-heina" src="app/static/kuvat/heinanteko.jpg" alt="">
+            <div class="k-kortti">
+              <div class="k-vuosi"><b>1876</b> · Pohjanmaa</div>
+              <div class="k-ote">…poika Juho Hentriki <mark>Mäntylä</mark> (puumerkit)…</div>
+              <div class="k-selitys">Mitä tässä sanotaan?</div>
+            </div>
           </div>
-        </div>
+          <div class="hero-teksti">
+            <h1>Kansallisarkiston Sisältöhaku</h1>
+            <p>Etsi esivanhempiasi Kansallisarkiston digitoiduista tuomiokirjoista, voudintileistä ja
+               keskiaikaisista asiakirjoista. Tekoäly kertoo selkokielellä, mitä löytämässäsi asiakirjassa sanotaan.</p>
+          </div>
+        </section></div>
     """, unsafe_allow_html=True)
     palautuu = kiintio_estetty_asti()
     if palautuu:
@@ -1365,8 +1375,8 @@ def main():
         elif not aja:
             vasen, oikea = st.columns([3, 2], gap="large")
             with oikea:
-                st.image("static/kuvat/perhe-uusikaarlepyy.jpg",
-                         caption="Perhe talonsa edustalla Uudenkaarlepyyn seudulla 1900-luvun alussa.")
+                st.image("static/kuvat/laituri-pohjanmaa.jpg",
+                         caption="Laituri ja purjevene Pohjanmaalla 1900-luvun alussa. Kuva: J. W. Schalin.")
             with vasen:
               st.markdown(
                 "<p class='johdanto'>Käräjien pöytäkirjoissa mainitaan talollisia, torppareita, "
