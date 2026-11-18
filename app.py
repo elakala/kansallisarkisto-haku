@@ -875,7 +875,11 @@ def nayta_tulos(tulos, idx, indeksi_avain):
         unsafe_allow_html=True,
     )
 
-    with st.expander("Koko teksti ja tekoälyselitys", expanded=False):
+    koko_teksti = src.get(teksti_kentta, "") or ""
+    if koko_teksti:
+        nayta_selityslaatikko(tulos, idx, koko_teksti)
+
+    with st.expander("Koko teksti ja lähdetiedot", expanded=False):
         if indeksi_avain != "df":
             tiedot = [("Aineisto", src.get("aineistokokonaisuus")), ("Pääsarja", src.get("pääsarja")),
                       ("Arkistoyksikkö", src.get("arkistoyksikkö"))]
@@ -886,40 +890,47 @@ def nayta_tulos(tulos, idx, indeksi_avain):
         st.markdown("<dl class='lisatiedot'>" + "".join(
             f"<dt>{html.escape(k)}</dt><dd>{html.escape(str(v or '–'))}</dd>" for k, v in tiedot)
             + "</dl>", unsafe_allow_html=True)
-
-        koko_teksti = src.get(teksti_kentta, "") or ""
         if koko_teksti:
             st.markdown(f"<div class='koko-teksti'>{turvallinen_katkelma(koko_teksti)}</div>",
                         unsafe_allow_html=True)
 
-        selitys_avain = f"selitys_{idx}_{tulos.get('_id', '')}"
+
+def nayta_selityslaatikko(tulos, idx, koko_teksti):
+    """Meripihkainen laatikko jokaisessa tuloskortissa: kutsu tekoälyselitykseen ja selitys itse."""
+    selitys_avain = f"selitys_{idx}_{tulos.get('_id', '')}"
+    with st.container(key=f"selityslaatikko_{selitys_avain}"):
+        valmis = st.session_state.get(selitys_avain)
+        if valmis and valmis[1]:
+            selitys, malli = valmis
+            st.markdown("<div class='selitys-otsikko'>Mitä tässä sanotaan?</div>", unsafe_allow_html=True)
+            st.markdown(selitys)
+            st.caption(f"Tekoälyn tulkinta ({malli}). Tarkista tärkeät tiedot alkuperäisestä asiakirjasta.")
+            return
+
         palautuu = kiintio_estetty_asti()
-        if palautuu and selitys_avain not in st.session_state:
+        kuvaus = (f"Päivän ilmaiset selitykset on käytetty. Ne palaavat käyttöön {palautuu:%d.%m.} klo {palautuu:%H.%M}."
+                  if palautuu else
+                  "Tekoäly kertoo selkokielellä, mistä asiakirjassa on kyse ja keitä siinä mainitaan.")
+        st.markdown("<div class='selitys-otsikko'>Mitä tässä sanotaan?</div>"
+                    f"<div class='selitys-kuvaus'>{kuvaus}</div>", unsafe_allow_html=True)
+
+        if palautuu:
             with st.container(key=f"estetty_{selitys_avain}"):
                 st.button("Tekoälyselitykset käytetty tältä päivältä", key=f"btn_{selitys_avain}",
                           icon=":material/block:", disabled=True,
                           help=f"Selitykset palaavat käyttöön {palautuu:%d.%m. klo %H.%M}.")
-        elif st.button("Selitä asiakirja selkokielellä", key=f"btn_{selitys_avain}",
-                       icon=":material/auto_awesome:"):
-            if koko_teksti:
-                with st.spinner("Tekoäly lukee asiakirjaa…"):
-                    st.session_state[selitys_avain] = selita_asiakirja_geminilla(koko_teksti)
-                if kiintio_estetty_asti():
-                    # Kiintiö loppui juuri: päivitetään koko sivu, jotta kaikki napit ja ilmoitus muuttuvat
-                    st.session_state.pop(selitys_avain, None)
-                    st.rerun()
-            else:
-                st.warning("Asiakirjassa ei ole tekstiä, jota selittää.")
+            return
 
-        if selitys_avain in st.session_state:
-            selitys, malli = st.session_state[selitys_avain]
-            if malli:
-                st.markdown("**Tekoälyn selitys** (tarkista aina alkuperäisestä):")
-                st.info(selitys)
-                st.caption(f"Selityksen teki {malli}.")
-            else:
-                st.warning(selitys)
-                del st.session_state[selitys_avain]  # virhe: sallitaan uusi yritys
+        if st.button("Selitä asiakirja", key=f"btn_{selitys_avain}", type="primary",
+                     icon=":material/auto_awesome:"):
+            with st.spinner("Tekoäly lukee asiakirjaa…"):
+                tulos_ = selita_asiakirja_geminilla(koko_teksti)
+            if kiintio_estetty_asti():
+                st.rerun()  # kiintiö loppui juuri: päivitetään kaikki napit ja ilmoitus
+            if tulos_[1]:
+                st.session_state[selitys_avain] = tulos_
+                st.rerun()
+            st.warning(tulos_[0])
 
 
 def suodata_ja_jarjesta(tulokset, indeksi_avain, jarjestys, aineisto_filtteri, valitut_tagit, teksti_filtteri=""):
@@ -1009,6 +1020,11 @@ div[data-testid="stForm"] [data-testid="InputInstructions"] { display: none; }
 .katkelma { background: #ece9e3; padding: 10px 14px; border-radius: 6px; margin-top: 10px;
   font-size: 0.98rem; line-height: 1.6; color: #2f2b27; max-width: 80ch; }
 .katkelma mark, .koko-teksti mark { background: #f6d58e; color: inherit; padding: 0 2px; border-radius: 2px; }
+[class*="st-key-selityslaatikko_"] { background: #fbf1dc; border: 1px solid #ecd6a6; border-radius: 10px;
+  padding: 14px 18px; margin: 10px 0 8px 0; max-width: 80ch; gap: 0.5rem; }
+.selitys-otsikko { font-weight: 700; color: #6e4c12; font-size: 1.05rem; margin-bottom: 6px; }
+.selitys-kuvaus { color: #5a4a33; font-size: 0.95rem; margin: -2px 0 8px 0; }
+[class*="st-key-selityslaatikko_"] [data-testid="stCaptionContainer"] p { color: #6b5a3e !important; }
 .koko-teksti { font-size: 0.95rem; line-height: 1.7; color: #2f2b27; max-height: 420px; overflow-y: auto; }
 ::selection { background: #f6d58e; color: #24211e; }
 </style>
