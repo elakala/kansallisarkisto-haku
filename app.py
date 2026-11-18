@@ -708,17 +708,24 @@ GEMINI_MALLIT = [
     ("gemini-2.5-flash-lite", "Gemini 2.5 Flash-Lite"),
 ]
 
-SELITYS_PROMPT = """Olet avustaja joka selittää Kansallisarkiston historiallisia asiakirjoja selkeällä suomen kielellä.
+SELITYS_VERSIO = 2  # nosta, kun ohje muuttuu: vanhat välimuistissa olevat selitykset vaihtuvat uusiin
+SELITYS_PROMPT = """Olet sukututkimukseen perehtynyt arkistoasiantuntija. Selität Kansallisarkiston historiallisia asiakirjoja selkeällä suomen yleiskielellä harrastajasukututkijalle.
 
-Vastaa ilman otsikkoa tässä järjestyksessä:
+Huomaa: teksti on koneellisesti tunnistettua (OCR). Siinä on lukuvirheitä, sanoja on katkennut rivinvaihdoissa (merkki ¬) ja osa tekstistä on ruotsia tai vanhaa suomea. Älä keksi tietoja. Jos nimi, luku tai päivämäärä on epävarma, merkitse se kysymysmerkillä suluissa (?). Jos tekstistä on jätetty pois keskiosa, se on merkitty […].
 
-**Mistä on kyse:** Selitä lyhyesti mistä asiakirjassa on kyse. Maksimissaan 2 lausetta, ei juridista ammattikieltä.
+Vastaa ilman otsikkoa tässä järjestyksessä. Jätä osio kokonaan pois, jos asiakirjassa ei ole sille tietoa.
 
-**Henkilöt:** Lista henkilöistä ja heidän rooleistaan. Pidä nimet ja roolit yksinkertaisina.
+**Mistä on kyse:** 3–5 lausetta. Kerro, millainen asia oli käsittelyssä ja miksi, mitä päätettiin tai sovittiin ja mitä se tarkoitti osapuolille.
 
-**Tapahtumapaikka:** Missä asiakirjassa kuvatut tapahtumat sijoittuvat. Maksimissaan 1 lause. Jätä pois jos ei mainita.
+**Henkilöt:** Lista muodossa "Nimi: rooli". Mainitse sukulaisuus muihin henkilöihin sekä sääty tai ammatti (esim. talollinen, torppari, leski, lautamies), jos ne kerrotaan.
 
-**Historiallinen tausta:** Maksimissaan 2 lausetta siitä mitä Suomessa tapahtui asiakirjan aikana ja miten se liittyy tähän asiakirjaan. Jätä pois jos yhteys on epäselvä.
+**Tapahtumapaikka:** Kylä, pitäjä ja talo. Enintään 1 lause.
+
+**Sukututkijalle:** Lista tiedoista, jotka kannattaa kirjata sukututkimukseen: päivämäärät (syntymä, kuolema, vihkiminen, kauppa, käräjäpäivä), sukulaisuussuhteet, talon nimi ja numero, kylä ja maaosuudet. Kirjoita nimet ja päivämäärät niin kuin ne asiakirjassa lukevat.
+
+**Vanhat sanat:** Enintään 4 vanhaa termiä tai ruotsinkielistä sanaa tekstistä ja lyhyt selitys kullekin (esim. manttaali, puumerkki, lainhuuto).
+
+**Historiallinen tausta:** Enintään 2 lausetta, ja vain jos yhteys asiakirjaan on selvä.
 
 Asiakirja:
 {katkelma}"""
@@ -756,14 +763,14 @@ class GeminiVirhe(Exception):
 
 
 @st.cache_data(ttl=60 * 60 * 24 * 30, max_entries=1000, show_spinner=False)
-def _selitys_valimuistista(katkelma, _avain):
+def _selitys_valimuistista(katkelma, versio, _avain):
     """Sama asiakirja selitetään vain kerran: tulos jaetaan kaikille käyttäjille 30 päiväksi.
     Vain onnistuneet selitykset tallentuvat, koska virhe keskeyttää funktion.
     Alaviivalla alkavaa avainta ei käytetä välimuistin tunnisteena."""
     payload = {
         "contents": [{"parts": [{"text": SELITYS_PROMPT.format(katkelma=katkelma)}]}],
         # Gemini 3.x -mallit toimivat parhaiten oletuslämpötilalla; Flash-Lite ajattelee oletuksena minimaalisesti.
-        "generationConfig": {"maxOutputTokens": 1000},
+        "generationConfig": {"maxOutputTokens": 1800},
     }
     viimeisin = None
     paivaraja_tayttyi = 0
@@ -800,10 +807,12 @@ def selita_asiakirja_geminilla(asiakirja_teksti: str):
     gemini_avain = hae_gemini_avain()
     if not gemini_avain:
         return "Gemini API-avain puuttuu. Lisää GEMINI_API_KEY Streamlitin Secrets-asetuksiin.", None
-    # Normalisoidaan välilyönnit, jotta sama asiakirja osuu välimuistiin
-    katkelma = " ".join(asiakirja_teksti.split())[:3000]
+    # Normalisoidaan välilyönnit, jotta sama asiakirja osuu välimuistiin.
+    # Pitkästä tekstistä otetaan alku ja loppu, koska päätös on pöytäkirjoissa usein lopussa.
+    teksti = " ".join(asiakirja_teksti.split())
+    katkelma = teksti if len(teksti) <= 8000 else teksti[:6000] + " […] " + teksti[-2000:]
     try:
-        return _selitys_valimuistista(katkelma, gemini_avain)
+        return _selitys_valimuistista(katkelma, SELITYS_VERSIO, gemini_avain)
     except GeminiVirhe as e:
         if e.koodi == KIINTIO_LOPPU:
             merkitse_kiintio_loppuneeksi()
@@ -921,9 +930,12 @@ def nayta_selityslaatikko(tulos, idx, koko_teksti):
                           help=f"Selitykset palaavat käyttöön {palautuu:%d.%m. klo %H.%M}.")
             return
 
-        if st.button("Selitä asiakirja", key=f"btn_{selitys_avain}", type="primary",
-                     icon=":material/auto_awesome:"):
-            with st.spinner("Tekoäly lukee asiakirjaa…"):
+        paikka = st.empty()
+        if paikka.button("Selitä asiakirja", key=f"btn_{selitys_avain}", type="primary",
+                         icon=":material/auto_awesome:"):
+            paikka.empty()  # painike pois työn ajaksi, ettei sitä paineta uudelleen
+            with st.spinner("Tekoäly lukee asiakirjaa ja kirjoittaa selitystä. Tämä kestää yleensä 5–15 sekuntia…",
+                            ):
                 tulos_ = selita_asiakirja_geminilla(koko_teksti)
             if kiintio_estetty_asti():
                 st.rerun()  # kiintiö loppui juuri: päivitetään kaikki napit ja ilmoitus
@@ -1025,6 +1037,8 @@ div[data-testid="stForm"] [data-testid="InputInstructions"] { display: none; }
 .selitys-otsikko { font-weight: 700; color: #6e4c12; font-size: 1.05rem; margin-bottom: 6px; }
 .selitys-kuvaus { color: #5a4a33; font-size: 0.95rem; margin: -2px 0 8px 0; }
 [class*="st-key-selityslaatikko_"] [data-testid="stCaptionContainer"] p { color: #6b5a3e !important; }
+[class*="st-key-selityslaatikko_"] [data-testid="stSpinner"] { color: #6e4c12; font-weight: 700; }
+[class*="st-key-selityslaatikko_"] [data-testid="stSpinner"] i { border-color: #ecd6a6; border-top-color: #b7863a; }
 .koko-teksti { font-size: 0.95rem; line-height: 1.7; color: #2f2b27; max-height: 420px; overflow-y: auto; }
 ::selection { background: #f6d58e; color: #24211e; }
 </style>
