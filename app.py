@@ -1011,21 +1011,13 @@ div[data-testid="stForm"] [data-testid="InputInstructions"] { display: none; }
 .kollaasi img { position: absolute; object-fit: cover; border-radius: 10px;
   box-shadow: 0 8px 24px rgba(0,0,0,0.35); outline: 1px solid rgba(255,255,255,0.08); }
 .k-perhe { left: 0; top: 40px; width: 54%; height: 180px; object-position: center 45%; }
-.k-poika { left: 40%; top: 108px; width: 24%; height: 190px; object-position: center 20%; z-index: 2; }
-.k-heina { left: 58%; top: 24px; width: 42%; height: 128px; object-position: center 60%; }
-.k-kortti { position: absolute; left: 55%; top: 168px; width: 45%; z-index: 3; background: #fdfcfa; border-radius: 10px;
-  padding: 10px 12px; box-shadow: 0 10px 28px rgba(0,0,0,0.4); font-size: 0.78rem; color: #24211e; line-height: 1.4; }
-.k-vuosi { margin-bottom: 4px; }
-.k-ote { background: #ece9e3; border-radius: 5px; padding: 5px 7px; color: #3d3832; }
-.k-ote mark { background: #f6d58e; color: inherit; padding: 0 2px; }
-.k-selitys { margin-top: 6px; background: #fbf1dc; border: 1px solid #ecd6a6; border-radius: 6px; padding: 4px 7px;
-  color: #6e4c12; font-weight: 700; }
+.k-poika { left: 42%; top: 104px; width: 24%; height: 196px; object-position: center 20%; z-index: 2; }
+.k-heina { left: 60%; top: 34px; width: 40%; height: 160px; object-position: center 60%; }
 .hero-teksti h1 { margin: 0; padding: 0; color: #fff; font-family: "Atkinson Hyperlegible", sans-serif;
   font-size: clamp(1.6rem, 2.5vw, 2.6rem); font-weight: 700; line-height: 1.12; letter-spacing: -0.015em;
   text-wrap: balance; word-break: keep-all; hyphens: manual; }
 .hero-teksti p { margin: 14px 0 0 0; color: #d9d3cb; font-size: 1.05rem; line-height: 1.55; max-width: 46ch; }
 .hero-kehys { container-type: inline-size; }
-@container (max-width: 720px) { .k-kortti { display: none; } .k-poika { left: 44%; } }
 @container (max-width: 600px) {
   .hero { grid-template-columns: 1fr; padding: 28px 24px; min-height: 0; gap: 0; }
   .kollaasi { display: none; }
@@ -1083,9 +1075,6 @@ KUVALAHTEET = [
     ("Perhe talon edustalla Uudenkaarlepyyn seudulla, 1900–1906",
      "Kuvaaja J. W. Schalin. Museovirasto, Historian kuvakokoelma, HK10019:53. Public Domain.",
      "https://museovirasto.finna.fi/Record/museovirasto.622f951c-eb53-4b99-bae0-c47309543d79"),
-    ("Laituri ja purjevene, Pohjanmaa",
-     "Kuvaaja J. W. Schalin. Museovirasto, Historian kuvakokoelma, HK10019:131. Public Domain.",
-     "https://museovirasto.finna.fi/Record/museovirasto.6496670a-90ff-4c8c-b410-98ca4e93edb5"),
 ]
 
 ESIMERKKIHAUT = ["Mäntylä", "Juho Mäntylä", "Mänty*"]
@@ -1200,18 +1189,13 @@ def main():
         st.session_state.setdefault(avain, oletus)
 
     # ── Banneri ────────────────────────────────────────────────────────────────
-    # ── Hero: kuvakollaasi Museoviraston kuvista + esimerkkituloskortti ───────
+    # ── Hero: kuvakollaasi Museoviraston kuvista ───────
     st.markdown("""
         <div class="hero-kehys"><section class="hero" aria-label="Kansallisarkiston Sisältöhaku">
           <div class="kollaasi" aria-hidden="true">
             <img class="k-perhe" src="app/static/kuvat/perhe-uusikaarlepyy.jpg" alt="">
             <img class="k-poika" src="app/static/kuvat/poika-haravoi-hartola.jpg" alt="">
             <img class="k-heina" src="app/static/kuvat/heinanteko.jpg" alt="">
-            <div class="k-kortti">
-              <div class="k-vuosi"><b>1876</b> · Pohjanmaa</div>
-              <div class="k-ote">…poika Juho Hentriki <mark>Mäntylä</mark> (puumerkit)…</div>
-              <div class="k-selitys">Mitä tässä sanotaan?</div>
-            </div>
           </div>
           <div class="hero-teksti">
             <h1>Kansallisarkiston Sisältöhaku</h1>
@@ -1373,22 +1357,17 @@ def main():
         elif haku:
             nayta_nollatulos(haku)
         elif not aja:
-            vasen, oikea = st.columns([3, 2], gap="large")
-            with oikea:
-                st.image("static/kuvat/laituri-pohjanmaa.jpg",
-                         caption="Laituri ja purjevene Pohjanmaalla 1900-luvun alussa. Kuva: J. W. Schalin.")
-            with vasen:
-              st.markdown(
-                "<p class='johdanto'>Käräjien pöytäkirjoissa mainitaan talollisia, torppareita, "
-                "leskiä ja lapsia: maakauppoja, perinnönjakoja, velkoja ja riitoja. Kirjoita hakuun "
-                "sukunimi tai talon nimi, niin näet asiakirjat, joissa se esiintyy, ja pääset "
-                "alkuperäiseen käsinkirjoitettuun sivuun.</p>",
-                unsafe_allow_html=True)
-              st.markdown("**Kokeile esimerkkihakua:**")
-              sarakkeet = st.columns(len(ESIMERKKIHAUT))
-              for sarake, esim in zip(sarakkeet, ESIMERKKIHAUT):
-                  sarake.button(esim, on_click=_aseta_ja_hae, kwargs={"hakusana": esim},
-                                width="stretch")
+            st.markdown(
+              "<p class='johdanto'>Käräjien pöytäkirjoissa mainitaan talollisia, torppareita, "
+              "leskiä ja lapsia: maakauppoja, perinnönjakoja, velkoja ja riitoja. Kirjoita hakuun "
+              "sukunimi tai talon nimi, niin näet asiakirjat, joissa se esiintyy, ja pääset "
+              "alkuperäiseen käsinkirjoitettuun sivuun.</p>",
+              unsafe_allow_html=True)
+            st.markdown("**Kokeile esimerkkihakua:**")
+            sarakkeet = st.columns(len(ESIMERKKIHAUT) + 2)
+            for sarake, esim in zip(sarakkeet, ESIMERKKIHAUT):
+                sarake.button(esim, on_click=_aseta_ja_hae, kwargs={"hakusana": esim},
+                              width="stretch")
 
     with tab_ohje:
         st.subheader("Näin haet")
