@@ -965,11 +965,13 @@ def nayta_tulos(tulos, idx, indeksi_avain, suosikki=None):
         teksti = src.get(teksti_kentta, "") or ""
         katkelma = turvallinen_katkelma(teksti[:300] + ("…" if len(teksti) > 300 else ""))
 
-    # Yläreuna: vuosi ja paikka vasemmalla, suosikki ja Astia-linkki oikealla
+    # Yläreuna: vuosi ja paikka vasemmalla, Astia-linkki ja oikeassa kulmassa suosikki
     tunnus = tulos.get("_id", "")
     with st.container(horizontal=True, vertical_alignment="center", gap="small",
                       key=f"kortinyla_{idx}_{tunnus}"):
         st.markdown(f"<div class='tulos-nimi'>{otsikko}</div>", unsafe_allow_html=True, width="stretch")
+        if linkki:
+            st.markdown(linkki, unsafe_allow_html=True, width="content")
         if st.session_state.get("suosikit") is not None and tunnus:
             tallennettu = on_suosikki(tunnus)
             st.button("Tallennettu" if tallennettu else "Tallenna suosikiksi",
@@ -978,8 +980,6 @@ def nayta_tulos(tulos, idx, indeksi_avain, suosikki=None):
                       help="Poista suosikeista" if tallennettu else "Tallenna tämä asiakirja Suosikit-välilehdelle",
                       on_click=_vaihda_suosikki,
                       args=(tulos, indeksi_avain, (st.session_state.get("hakutulos") or {}).get("hakusana", "")))
-        if linkki:
-            st.markdown(linkki, unsafe_allow_html=True, width="content")
 
     st.markdown(
         f"<div class='tulos'>"
@@ -1138,10 +1138,9 @@ div[data-testid="stForm"] [data-testid="InputInstructions"] { display: none; }
 [class*="st-key-tuloskortti_"] { background: #fdfcfa; border: 1px solid #dcd8d0; border-radius: 12px;
   padding: 18px 22px 14px 22px; margin-bottom: 18px; box-shadow: 0 1px 2px rgba(36,33,30,0.06), 0 4px 12px rgba(36,33,30,0.04); }
 .tulos { padding: 0; }
-[class*="st-key-kortinyla_"] { gap: 6px 14px; }
+[class*="st-key-kortinyla_"] { gap: 12px 18px; }
 [class*="st-key-kortinyla_"] p { margin: 0; }
 .tulos-nimi { line-height: 1.3; }
-[class*="st-key-kortinyla_"] button { min-height: 0; padding-top: 0; padding-bottom: 0; }
 [class*="st-key-suosikki_on_"] button, [class*="st-key-suosikki_on_"] button p,
 [class*="st-key-suosikki_on_"] [data-testid="stIconMaterial"] { color: #8a5a10 !important; font-weight: 700; }
 .st-key-muutosilmoitus { background: #f3effd; border: 1.5px solid #a993ea; border-radius: 10px;
