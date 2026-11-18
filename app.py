@@ -965,25 +965,30 @@ def nayta_tulos(tulos, idx, indeksi_avain, suosikki=None):
         teksti = src.get(teksti_kentta, "") or ""
         katkelma = turvallinen_katkelma(teksti[:300] + ("…" if len(teksti) > 300 else ""))
 
+    # Yläreuna: vuosi ja paikka vasemmalla, suosikki ja Astia-linkki oikealla
+    tunnus = tulos.get("_id", "")
+    with st.container(horizontal=True, vertical_alignment="center", gap="small",
+                      key=f"kortinyla_{idx}_{tunnus}"):
+        st.markdown(f"<div class='tulos-nimi'>{otsikko}</div>", unsafe_allow_html=True, width="stretch")
+        if st.session_state.get("suosikit") is not None and tunnus:
+            tallennettu = on_suosikki(tunnus)
+            st.button("Tallennettu" if tallennettu else "Tallenna suosikiksi",
+                      key=f"suosikki_{'on' if tallennettu else 'ei'}_{idx}_{tunnus}", type="tertiary",
+                      icon=":material/bookmark_added:" if tallennettu else ":material/bookmark_add:",
+                      help="Poista suosikeista" if tallennettu else "Tallenna tämä asiakirja Suosikit-välilehdelle",
+                      on_click=_vaihda_suosikki,
+                      args=(tulos, indeksi_avain, (st.session_state.get("hakutulos") or {}).get("hakusana", "")))
+        if linkki:
+            st.markdown(linkki, unsafe_allow_html=True, width="content")
+
     st.markdown(
         f"<div class='tulos'>"
-        f"<div class='tulos-otsikko'><div>{otsikko}</div>{linkki}</div>"
         f"<div class='tulos-lahde'>{html.escape(lahde)}</div>"
         + (f"<div class='tagirivi'>{tagirivi}</div>" if tagirivi else "")
         + (f"<div class='katkelma'>{katkelma}</div>" if katkelma else "")
         + "</div>",
         unsafe_allow_html=True,
     )
-
-    tunnus = tulos.get("_id", "")
-    if st.session_state.get("suosikit") is not None and tunnus:
-        tallennettu = on_suosikki(tunnus)
-        st.button("Tallennettu suosikkeihin" if tallennettu else "Tallenna suosikiksi",
-                  key=f"suosikki_{'on' if tallennettu else 'ei'}_{idx}_{tunnus}", type="tertiary",
-                  icon=":material/bookmark_added:" if tallennettu else ":material/bookmark_add:",
-                  help="Poista suosikeista" if tallennettu else "Tallenna tämä asiakirja Suosikit-välilehdelle",
-                  on_click=_vaihda_suosikki,
-                  args=(tulos, indeksi_avain, (st.session_state.get("hakutulos") or {}).get("hakusana", "")))
 
     if suosikki is not None:
         if suosikki.get("hakusana") or suosikki.get("lisatty"):
@@ -1133,6 +1138,10 @@ div[data-testid="stForm"] [data-testid="InputInstructions"] { display: none; }
 [class*="st-key-tuloskortti_"] { background: #fdfcfa; border: 1px solid #dcd8d0; border-radius: 12px;
   padding: 18px 22px 14px 22px; margin-bottom: 18px; box-shadow: 0 1px 2px rgba(36,33,30,0.06), 0 4px 12px rgba(36,33,30,0.04); }
 .tulos { padding: 0; }
+[class*="st-key-kortinyla_"] { gap: 6px 14px; }
+[class*="st-key-kortinyla_"] p { margin: 0; }
+.tulos-nimi { line-height: 1.3; }
+[class*="st-key-kortinyla_"] button { min-height: 0; padding-top: 0; padding-bottom: 0; }
 [class*="st-key-suosikki_on_"] button, [class*="st-key-suosikki_on_"] button p,
 [class*="st-key-suosikki_on_"] [data-testid="stIconMaterial"] { color: #8a5a10 !important; font-weight: 700; }
 .st-key-muutosilmoitus { background: #f3effd; border: 1.5px solid #a993ea; border-radius: 10px;
@@ -1145,7 +1154,7 @@ div[data-testid="stForm"] [data-testid="InputInstructions"] { display: none; }
 .tulos-vuosi { font-size: 1.25rem; font-weight: 700; color: #24211e; font-variant-numeric: tabular-nums; }
 .tulos-paikka { font-size: 1.1rem; color: #24211e; }
 .tulos-linkki { font-size: 0.95rem; white-space: nowrap; color: #4b4038 !important; text-underline-offset: 3px; }
-.tulos-lahde { font-size: 0.9rem; color: #5f5850; margin-top: 2px; }
+.tulos-lahde { font-size: 0.9rem; color: #5f5850; margin-top: -6px; }
 .tagirivi { margin-top: 8px; }
 .rajausrivi { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 2px 0 6px 0; }
 .rajaus-otsikko { font-size: 0.9rem; color: #5f5850; font-weight: 700; margin-right: 4px; }
