@@ -920,6 +920,11 @@ div[data-testid="stForm"] [data-testid="InputInstructions"] { display: none; }
 .tulos-linkki { font-size: 0.95rem; white-space: nowrap; color: #4b4038 !important; text-underline-offset: 3px; }
 .tulos-lahde { font-size: 0.9rem; color: #5f5850; margin-top: 2px; }
 .tagirivi { margin-top: 8px; }
+.rajausrivi { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 2px 0 6px 0; }
+.rajaus-otsikko { font-size: 0.9rem; color: #5f5850; font-weight: 700; margin-right: 4px; }
+.rajaus { display: inline-block; padding: 3px 12px; border-radius: 999px; background: #e3ded5;
+  color: #24211e; font-size: 0.9rem; border: 1px solid #d3cdc2; }
+[data-testid="stHeaderActionElements"] { display: none; }
 .tagi { display: inline-block; padding: 2px 10px; margin: 0 6px 4px 0; border-radius: 999px;
   background: #f3e6c8; color: #6e4c12; font-size: 0.85rem; }
 .katkelma { background: #ece9e3; padding: 10px 14px; border-radius: 6px; margin-top: 10px;
@@ -1008,6 +1013,10 @@ def nayta_tulokset(haku):
     if vk:
         yhteenveto.append(f"vuosilta {min(vk)}–{max(vk) + 9}")
     st.markdown(" · ".join(yhteenveto))
+    rajaukset = [haku.get("aineisto_nimi")] + haku.get("rajaukset", [])
+    st.markdown("<div class='rajausrivi'><span class='rajaus-otsikko'>Rajaukset</span>"
+                + "".join(f"<span class='rajaus'>{html.escape(r)}</span>" for r in rajaukset if r)
+                + "</div>", unsafe_allow_html=True)
     if haku.get("kuvaus"):
         st.caption(f"Hakuehto: {haku['kuvaus']}")
 
@@ -1197,8 +1206,10 @@ def main():
                 if resp:
                     st.session_state["hakutulos"] = {
                         "hakusana": hakusana,
-                        "kuvaus": " · ".join([kuvaa_haku(hakusana, liittyva_hakusana, nimivariaatiot, sumea, laaja)
-                                              .replace("  \n", " · ")] + rajaukset),
+                        "kuvaus": kuvaa_haku(hakusana, liittyva_hakusana, nimivariaatiot, sumea, laaja)
+                                  .replace("  \n", " · "),
+                        "rajaukset": rajaukset,
+                        "aineisto_nimi": indeksi_nimi,
                         "ehdot": nykyiset_ehdot,
                         "osumia": resp.get("hits", {}).get("total", {}).get("value", 0),
                         "tulokset": resp.get("hits", {}).get("hits", []),
