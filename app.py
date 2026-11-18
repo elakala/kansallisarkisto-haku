@@ -1016,7 +1016,14 @@ div[data-testid="stForm"] [data-testid="InputInstructions"] { display: none; }
 
 .johdanto { font-size: 1.05rem; line-height: 1.6; max-width: 68ch; color: #3d3832; }
 
-.tulos { padding: 18px 0 10px 0; border-top: 1px solid #dcd8d0; }
+[class*="st-key-tuloskortti_"] { background: #fdfcfa; border: 1px solid #dcd8d0; border-radius: 12px;
+  padding: 18px 22px 14px 22px; margin-bottom: 18px; box-shadow: 0 1px 2px rgba(36,33,30,0.06), 0 4px 12px rgba(36,33,30,0.04); }
+.tulos { padding: 0; }
+.st-key-muutosilmoitus { background: #e8e7f6; border: 1px solid #b9b5e0; border-radius: 10px;
+  padding: 12px 16px; margin: 4px 0 18px 0; gap: 16px; position: sticky; top: 0.5rem; z-index: 5; }
+.st-key-muutosilmoitus p { color: #2e2a5c; margin: 0; }
+.st-key-muutosilmoitus button { background: #4a438f !important; border-color: #4a438f !important; color: #fff !important; flex-shrink: 0; }
+.st-key-muutosilmoitus button p { color: #fff !important; }
 .tulos-otsikko { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; flex-wrap: wrap; }
 .tulos-vuosi { font-size: 1.25rem; font-weight: 700; color: #24211e; font-variant-numeric: tabular-nums; }
 .tulos-paikka { font-size: 1.1rem; color: #24211e; }
@@ -1163,7 +1170,8 @@ def nayta_tulokset(haku):
         st.info("Rajaus jätti tulokset tyhjiksi. Poista jokin rajaus yllä.")
     else:
         for idx, tulos in enumerate(tulokset):
-            nayta_tulos(tulos, idx, indeksi)
+            with st.container(key=f"tuloskortti_{idx}_{tulos.get('_id', '')}"):
+                nayta_tulos(tulos, idx, indeksi)
 
     st.divider()
     with st.expander("Osumien jakaumat (vuosikymmenet, maakunnat, aineistot)", icon=":material/bar_chart:"):
@@ -1343,10 +1351,11 @@ def main():
         haku = st.session_state.get("hakutulos")
         if haku and haku.get("ehdot") != nykyiset_ehdot:
             # Käyttäjä on muuttanut hakua tai rajauksia: kerrotaan, ettei alla oleva vielä vastaa niitä
-            ilmoitus, painike = st.columns([4, 1], vertical_alignment="center")
-            ilmoitus.info("Muutit hakuehtoja. Alla näkyvät vielä edellisen haun tulokset.",
-                          icon=":material/update:")
-            painike.button("Päivitä haku", type="primary", on_click=_aseta_ja_hae, width="stretch")
+            with st.container(key="muutosilmoitus", horizontal=True, vertical_alignment="center"):
+                st.markdown("**Muutit hakuehtoja.** Alla näkyvät vielä edellisen haun tulokset. "
+                            "Päivitä haku, niin tulokset vastaavat uusia ehtoja.")
+                st.button("Päivitä haku", type="primary", on_click=_aseta_ja_hae,
+                          icon=":material/refresh:", key="paivita_haku")
         if haku and haku["osumia"] > 0:
             nayta_tulokset(haku)
         elif haku:
