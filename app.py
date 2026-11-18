@@ -13,6 +13,7 @@ import html
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 import json
+import uuid
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -845,7 +846,92 @@ def tuloksen_vuosi(src):
 ASIASANATAGIT = set(ASIASANAT.keys()) - {"Henkilö"}  # liian yleinen näytettäväksi
 
 
-def nayta_tulos(tulos, idx, indeksi_avain):
+# ── Suosikit: tallennetaan selaimen omaan muistiin (localStorage) ─────────────
+# Jokaisella selaimella on oma listansa, joten sinulla ja isälläsi on automaattisesti omat suosikit.
+# Komponentti lukee listan kerran istunnon alussa ja kirjoittaa sen aina, kun versio kasvaa.
+SUOSIKIT_JS = """
+export default function(component) {
+  const { data, setStateValue } = component;
+  const AVAIN = 'kansallisarkisto_haku_suosikit_v1';
+  window.__kahSuosikit = window.__kahSuosikit || {};
+  const tila = window.__kahSuosikit;
+  if (!data || !data.tunnus) return;
+  if (tila.tunnus !== data.tunnus) { tila.tunnus = data.tunnus; tila.versio = 0; tila.luettu = false; }
+  if (data.versio > tila.versio) {
+    try { localStorage.setItem(AVAIN, data.kirjoita); } catch (e) {}
+    tila.versio = data.versio;
+  }
+  if (!tila.luettu) {
+    tila.luettu = true;
+    let raaka = null;
+    try { raaka = localStorage.getItem(AVAIN); } catch (e) {}
+    setStateValue('arvo', raaka === null ? '[]' : raaka);
+  }
+}
+"""
+_suosikkivarasto = st.components.v2.component("kah_suosikkivarasto", js=SUOSIKIT_JS)
+
+SUOSIKIN_KENTAT = ["aineistokokonaisuus", "arkistoyksikkö", "pääsarja", "alkuvuosi", "loppuvuosi",
+                   "dating_start_year", "dating_end_year", "url", "issuingplace", "issuingplacecountry",
+                   "language", "df", "indexterm", "teksti", "transcript"]
+
+
+def synkronoi_suosikit():
+    """Kutsutaan kerran jokaisella ajolla ennen tulosten piirtämistä."""
+    st.session_state.setdefault("suosikit_tunnus", uuid.uuid4().hex)
+    st.session_state.setdefault("suosikit_versio", 0)
+    st.session_state.setdefault("suosikit", None)
+    lista = st.session_state["suosikit"]
+    tulos = _suosikkivarasto(
+        key="suosikkivarasto",
+        data={"tunnus": st.session_state["suosikit_tunnus"], "versio": st.session_state["suosikit_versio"],
+              "kirjoita": json.dumps(lista or [], ensure_ascii=False)},
+        default={"arvo": None}, on_arvo_change=lambda: None, height=0)
+    if lista is None and tulos.arvo is not None:
+        try:
+            ladattu = json.loads(tulos.arvo)
+            st.session_state["suosikit"] = ladattu if isinstance(ladattu, list) else []
+        except (ValueError, TypeError):
+            st.session_state["suosikit"] = []
+
+
+def _tallenna_suosikit(lista):
+    st.session_state["suosikit"] = lista
+    st.session_state["suosikit_versio"] += 1
+
+
+def on_suosikki(tunnus):
+    return any(s.get("id") == tunnus for s in (st.session_state.get("suosikit") or []))
+
+
+def _vaihda_suosikki(tulos, indeksi_avain, hakusana):
+    lista = list(st.session_state.get("suosikit") or [])
+    tunnus = tulos.get("_id", "")
+    if on_suosikki(tunnus):
+        lista = [s for s in lista if s.get("id") != tunnus]
+    else:
+        src = tulos.get("_source", {})
+        tallennettava = {k: src[k] for k in SUOSIKIN_KENTAT if src.get(k) not in (None, "")}
+        for k in ("teksti", "transcript"):
+            if k in tallennettava:
+                tallennettava[k] = str(tallennettava[k])[:15000]
+        korostus = {k: v[:1] for k, v in (tulos.get("highlight") or {}).items()}
+        lista.insert(0, {"id": tunnus, "indeksi": indeksi_avain, "source": tallennettava,
+                         "highlight": korostus, "hakusana": hakusana or "",
+                         "lisatty": datetime.now(ZoneInfo("Europe/Helsinki")).strftime("%d.%m.%Y"),
+                         "muistiinpano": ""})
+    _tallenna_suosikit(lista)
+
+
+def _paivita_muistiinpano(tunnus, avain):
+    lista = list(st.session_state.get("suosikit") or [])
+    for s in lista:
+        if s.get("id") == tunnus:
+            s["muistiinpano"] = st.session_state.get(avain, "")
+    _tallenna_suosikit(lista)
+
+
+def nayta_tulos(tulos, idx, indeksi_avain, suosikki=None):
     src = tulos.get("_source", {})
     highlights = tulos.get("highlight", {})
     indeksi_avain = tuloksen_indeksi(src, indeksi_avain)
@@ -888,6 +974,25 @@ def nayta_tulos(tulos, idx, indeksi_avain):
         + "</div>",
         unsafe_allow_html=True,
     )
+
+    tunnus = tulos.get("_id", "")
+    if st.session_state.get("suosikit") is not None and tunnus:
+        tallennettu = on_suosikki(tunnus)
+        st.button("Tallennettu suosikkeihin" if tallennettu else "Tallenna suosikiksi",
+                  key=f"suosikki_{'on' if tallennettu else 'ei'}_{idx}_{tunnus}", type="tertiary",
+                  icon=":material/bookmark_added:" if tallennettu else ":material/bookmark_add:",
+                  help="Poista suosikeista" if tallennettu else "Tallenna tämä asiakirja Suosikit-välilehdelle",
+                  on_click=_vaihda_suosikki,
+                  args=(tulos, indeksi_avain, (st.session_state.get("hakutulos") or {}).get("hakusana", "")))
+
+    if suosikki is not None:
+        if suosikki.get("hakusana") or suosikki.get("lisatty"):
+            st.caption(f"Tallennettu {suosikki.get('lisatty', '')}"
+                       + (f" haulla ”{suosikki['hakusana']}”" if suosikki.get("hakusana") else ""))
+        avain = f"muistiinpano_{tunnus}"
+        st.session_state.setdefault(avain, suosikki.get("muistiinpano", ""))
+        st.text_input("Oma muistiinpano", key=avain, placeholder="esim. isoisän isä? tarkista rippikirjasta",
+                      on_change=_paivita_muistiinpano, args=(tunnus, avain))
 
     koko_teksti = src.get(teksti_kentta, "") or ""
     if koko_teksti:
@@ -1028,6 +1133,8 @@ div[data-testid="stForm"] [data-testid="InputInstructions"] { display: none; }
 [class*="st-key-tuloskortti_"] { background: #fdfcfa; border: 1px solid #dcd8d0; border-radius: 12px;
   padding: 18px 22px 14px 22px; margin-bottom: 18px; box-shadow: 0 1px 2px rgba(36,33,30,0.06), 0 4px 12px rgba(36,33,30,0.04); }
 .tulos { padding: 0; }
+[class*="st-key-suosikki_on_"] button, [class*="st-key-suosikki_on_"] button p,
+[class*="st-key-suosikki_on_"] [data-testid="stIconMaterial"] { color: #8a5a10 !important; font-weight: 700; }
 .st-key-muutosilmoitus { background: #f3effd; border: 1.5px solid #a993ea; border-radius: 10px;
   padding: 12px 16px; margin: 4px 0 18px 0; gap: 16px; position: sticky; top: 0.5rem; z-index: 5; }
 /* Laventeli: vaalea pohja, Digital Lavender -henkinen reunus ja violetti painike */
@@ -1175,6 +1282,43 @@ def nayta_tulokset(haku):
             st.json(haku["kysely"])
 
 
+def nayta_suosikit():
+    lista = st.session_state.get("suosikit")
+    if lista is None:
+        st.caption("Ladataan suosikkeja…")
+        return
+    if not lista:
+        st.markdown("<p class='johdanto'>Et ole vielä tallentanut suosikkeja. Paina hakutuloksessa "
+                    "<b>Tallenna suosikiksi</b>, niin asiakirja tallentuu tänne. Voit lisätä siihen myös "
+                    "oman muistiinpanon.</p>", unsafe_allow_html=True)
+    else:
+        st.markdown(f"### Suosikit ({len(lista)})")
+        st.caption("Suosikit tallentuvat tämän selaimen muistiin. Toisella laitteella tai selaimella on oma listansa.")
+        for i, s in enumerate(lista):
+            tulos = {"_id": s.get("id", ""), "_source": s.get("source", {}), "highlight": s.get("highlight", {})}
+            with st.container(key=f"tuloskortti_s{i}_{s.get('id', '')}"):
+                nayta_tulos(tulos, f"s{i}", s.get("indeksi", "tuomiokirjat"), suosikki=s)
+
+    with st.expander("Varmuuskopio", icon=":material/save:"):
+        st.caption("Suosikit katoavat, jos selaimen tiedot tyhjennetään. Lataa varmuuskopio talteen, "
+                   "niin voit palauttaa ne myöhemmin tai siirtää toiselle laitteelle.")
+        st.download_button("Lataa suosikit tiedostona", icon=":material/download:",
+                           data=json.dumps(lista or [], ensure_ascii=False, indent=1),
+                           file_name="kansallisarkisto-suosikit.json", mime="application/json",
+                           disabled=not lista)
+        tiedosto = st.file_uploader("Palauta suosikit tiedostosta", type=["json"], key="suosikit_palautus")
+        if tiedosto is not None and st.button("Lisää tiedoston suosikit", icon=":material/upload:"):
+            try:
+                tuodut = json.loads(tiedosto.getvalue().decode("utf-8"))
+                olemassa = {s.get("id") for s in (lista or [])}
+                uudet = [t for t in tuodut if isinstance(t, dict) and t.get("id") and t.get("id") not in olemassa]
+                _tallenna_suosikit(uudet + list(lista or []))
+                st.success(f"Lisättiin {len(uudet)} suosikkia.")
+                st.rerun()
+            except (ValueError, UnicodeDecodeError):
+                st.error("Tiedostoa ei voitu lukea. Valitse aiemmin ladattu suosikkitiedosto.")
+
+
 def main():
     st.set_page_config(
         page_title="Kansallisarkiston Sisältöhaku – sukututkimus",
@@ -1292,7 +1436,8 @@ def main():
             help="Rajaa tuloksiin, joissa esiintyy ainakin yksi näistä sanoista.")
         tulosten_maara = st.slider("Näytettävien tulosten määrä", 10, 500, 100, step=10)
 
-    tab_haku, tab_ohje = st.tabs(["Hakutulokset", "Ohjeet ja vinkit"])
+    synkronoi_suosikit()
+    tab_haku, tab_suosikit, tab_ohje = st.tabs(["Hakutulokset", "Suosikit", "Ohjeet ja vinkit"])
 
     with tab_haku:
         hakusana = (st.session_state.get("hakusana") or "").strip()
@@ -1369,6 +1514,9 @@ def main():
                 sarake.button(esim, on_click=_aseta_ja_hae, kwargs={"hakusana": esim},
                               width="stretch")
 
+    with tab_suosikit:
+        nayta_suosikit()
+
     with tab_ohje:
         st.subheader("Näin haet")
         col1, col2 = st.columns(2)
@@ -1439,6 +1587,7 @@ Tunnisteet ovat suuntaa antavia, koska ne perustuvat yksittäisiin sanoihin.
 - **Käytä sanan alkua epävarmoissa nimissä.** `Mänty*` löytää kaikki muunnokset.
 - **Rajaa aikaväli.** Jos tiedät henkilön eläneen n. 1780–1830, rajaa haku siihen.
 - **Valitse tuomiokunta**, jos tiedät pitäjän. Valitse ensin maakunta sivupalkista.
+- **Tallenna löydöt suosikeiksi.** Tuloksen *Tallenna suosikiksi* -painike vie asiakirjan Suosikit-välilehdelle, jossa voit lisätä oman muistiinpanon.
 - **Avaa alkuperäinen asiakirja.** Linkki vie Astiaan, jossa näet käsinkirjoitetun sivun. Koneellisesti tunnistettu teksti sisältää virheitä.
 """)
 
