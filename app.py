@@ -10,6 +10,7 @@ import requests
 import os
 import re
 import html
+import random
 import json
 from dotenv import load_dotenv
 
@@ -892,6 +893,8 @@ div[data-testid="stForm"] [data-testid="InputInstructions"] { display: none; }
 
 .banneri { display: flex; min-height: 220px; border-radius: 10px; overflow: hidden;
   background-size: cover; background-position: center 40%; margin-bottom: 1.5rem; }
+.banneri-lahde { font-size: 0.8rem; color: #5f5850; margin: -1.1rem 0 1rem 0; }
+.banneri-lahde a { color: inherit !important; text-underline-offset: 2px; }
 .banneri-sisus { flex: 1; display: flex; flex-direction: column;
   justify-content: flex-end; padding: 28px 36px;
   background: linear-gradient(90deg, rgba(28,25,22,0.80) 0%, rgba(28,25,22,0.48) 55%, rgba(28,25,22,0.15) 100%); }
@@ -918,8 +921,24 @@ div[data-testid="stForm"] [data-testid="InputInstructions"] { display: none; }
 </style>
 """
 
-BANNERI_URL = ("https://raw.githubusercontent.com/elakala/kansallisarkisto-haku/main/"
-               "ChatGPT%20Image%2022.5.2026%20klo%2018.06.27.png")
+# Bannerikuvat vaihtuvat satunnaisesti istunnoittain. "lahde" näytetään kuvan alla,
+# kun kuva on arkistosta (Public Domain -kuvissakin Museovirasto pyytää mainitsemaan lähteen).
+BANNERIT = [
+    {
+        "url": ("https://raw.githubusercontent.com/elakala/kansallisarkisto-haku/main/"
+                "ChatGPT%20Image%2022.5.2026%20klo%2018.06.27.png"),
+        "kohta": "center 40%",
+        "lahde": None,
+    },
+    {
+        "url": ("https://museovirasto.finna.fi/Cover/Show?source=Solr&size=large"
+                "&id=museovirasto.c030cad0-0a03-41ee-b0d8-fcb3d61fd555"),
+        "kohta": "center 62%",
+        "lahde": ("Peltoaukeama Seinäjoen ja Ilmajoen Munakan kylän välillä, 1913. "
+                  "Museovirasto, Historian kuvakokoelma, HK8134:2412. Public Domain."),
+        "lahde_url": "https://museovirasto.finna.fi/Record/museovirasto.c030cad0-0a03-41ee-b0d8-fcb3d61fd555",
+    },
+]
 
 ESIMERKKIHAUT = ["Mäntylä", "Juho Mäntylä", "Mänty*"]
 
@@ -1028,8 +1047,11 @@ def main():
         st.session_state.setdefault(avain, oletus)
 
     # ── Banneri ────────────────────────────────────────────────────────────────
+    if "banneri" not in st.session_state:
+        st.session_state["banneri"] = random.randrange(len(BANNERIT))
+    banneri = BANNERIT[st.session_state["banneri"]]
     st.markdown(f"""
-        <div class="banneri" style="background-image:url('{BANNERI_URL}')">
+        <div class="banneri" style="background-image:url('{banneri["url"]}');background-position:{banneri["kohta"]}">
           <div class="banneri-sisus">
             <h1>Kansallisarkiston Sisältöhaku</h1>
             <p>Etsi esivanhempiasi Kansallisarkiston digitoiduista tuomiokirjoista,
@@ -1037,6 +1059,9 @@ def main():
           </div>
         </div>
     """, unsafe_allow_html=True)
+    if banneri["lahde"]:
+        st.markdown(f"<p class='banneri-lahde'>Kuva: <a href='{banneri['lahde_url']}' target='_blank' "
+                    f"rel='noopener'>{html.escape(banneri['lahde'])}</a></p>", unsafe_allow_html=True)
 
     api_avain = hae_api_avain()
 
