@@ -974,7 +974,7 @@ def nayta_tulos(tulos, idx, indeksi_avain, suosikki=None):
             st.markdown(linkki, unsafe_allow_html=True, width="content")
         if st.session_state.get("suosikit") is not None and tunnus:
             tallennettu = on_suosikki(tunnus)
-            st.button("Tallennettu" if tallennettu else "Tallenna suosikiksi",
+            st.button("Tallennettu" if tallennettu else "Tallenna",
                       key=f"suosikki_{'on' if tallennettu else 'ei'}_{idx}_{tunnus}", type="tertiary",
                       icon=":material/bookmark_added:" if tallennettu else ":material/bookmark_add:",
                       help="Poista suosikeista" if tallennettu else "Tallenna tämä asiakirja Suosikit-välilehdelle",
@@ -1297,7 +1297,7 @@ def nayta_suosikit():
         return
     if not lista:
         st.markdown("<p class='johdanto'>Et ole vielä tallentanut suosikkeja. Paina hakutuloksessa "
-                    "<b>Tallenna suosikiksi</b>, niin asiakirja tallentuu tänne. Voit lisätä siihen myös "
+                    "<b>Tallenna</b>, niin asiakirja tallentuu tänne. Voit lisätä siihen myös "
                     "oman muistiinpanon.</p>", unsafe_allow_html=True)
     else:
         st.markdown(f"### Suosikit ({len(lista)})")
@@ -1595,7 +1595,7 @@ Tunnisteet ovat suuntaa antavia, koska ne perustuvat yksittäisiin sanoihin.
 - **Käytä sanan alkua epävarmoissa nimissä.** `Mänty*` löytää kaikki muunnokset.
 - **Rajaa aikaväli.** Jos tiedät henkilön eläneen n. 1780–1830, rajaa haku siihen.
 - **Valitse tuomiokunta**, jos tiedät pitäjän. Valitse ensin maakunta sivupalkista.
-- **Tallenna löydöt suosikeiksi.** Tuloksen *Tallenna suosikiksi* -painike vie asiakirjan Suosikit-välilehdelle, jossa voit lisätä oman muistiinpanon.
+- **Tallenna löydöt suosikeiksi.** Tuloksen *Tallenna*-painike vie asiakirjan Suosikit-välilehdelle, jossa voit lisätä oman muistiinpanon.
 - **Avaa alkuperäinen asiakirja.** Linkki vie Astiaan, jossa näet käsinkirjoitetun sivun. Koneellisesti tunnistettu teksti sisältää virheitä.
 """)
 
