@@ -43,7 +43,7 @@ NIMIVARIAATIOT = {
 }
 
 INDEKSIT = {
-    "Tuomiokirjat (1600–1900-luvut)": "tuomiokirjat",
+    "Tuomiokirjat ja viranomaisaineistot (1600–1940-luvut)": "tuomiokirjat",
     "Voudintilit (1537–1634)": "voudintilit",
     "Diplomatarium Fennicum (Keskiaika)": "df",
     "Kaikki aineistot": "tuomiokirjat,voudintilit,df",
@@ -157,7 +157,7 @@ AINEISTO_MAAKUNTA = {
     "Kokemäen": "Satakunta",
     "Huittisten": "Satakunta",
     "Harjavallan": "Satakunta",
-    "Raaseporin": "Satakunta",
+    "Ala-Satakunnan": "Satakunta",
     # Häme
     "Hämeenlinnan": "Kanta-Häme",
     "Tammelan": "Kanta-Häme",
@@ -199,7 +199,7 @@ AINEISTO_MAAKUNTA = {
     "Iitin": "Kymenlaakso",
     # Etelä-Karjala
     "Lappeenrannan": "Etelä-Karjala",
-    "Viipurin": "Etelä-Karjala",
+    "Viipurin": "Luovutettu Karjala ja Inkeri",
     "Joutsenon": "Etelä-Karjala",
     "Ruokolahden": "Etelä-Karjala",
     "Savitaipaleen": "Etelä-Karjala",
@@ -246,6 +246,66 @@ AINEISTO_MAAKUNTA = {
     "Kajaanin": "Kainuu",
     "Sotkamon": "Kainuu",
     "Kuhmon": "Kainuu",
+
+    # ── Lisätty 11/2026: aineistot, jotka puuttuivat (tarkistettu Sisältöhausta) ──
+    # Pohjanmaa (Korsholma = Mustasaari; ruotsinkieliset kaupunkien arkistot)
+    "Korsholman": "Pohjanmaa",
+    "Pietarsaaren": "Pohjanmaa",
+    "Rådstuvurättens i Kristinestad": "Pohjanmaa",
+    "Rådstuvurättens i Nykarleby": "Pohjanmaa",
+    "Rådstuvurättens i Jakobstad": "Pohjanmaa",
+    # Pohjois-Pohjanmaa
+    "Pohjois-Pohjanmaan": "Pohjois-Pohjanmaa",
+    "Piippolan": "Pohjois-Pohjanmaa",
+    # Pirkanmaa (Ylä-Satakunta on nykyistä Pirkanmaata)
+    "Ylä-Satakunnan": "Pirkanmaa",
+    # Varsinais-Suomi
+    "Piikkiön": "Varsinais-Suomi",
+    # Uusimaa
+    "Raaseporin": "Uusimaa",
+    "Mäntsälän": "Uusimaa",
+    "Uudenmaan läänin": "Uusimaa",
+    "Uudenmaan lääninhallituksen": "Uusimaa",
+    # Kanta-Häme
+    "Hauhon": "Kanta-Häme",
+    "Sääksmäen": "Kanta-Häme",
+    "Hämeen läänin": "Kanta-Häme",
+    # Kymenlaakso
+    "Kymin": "Kymenlaakso",
+    "Kymenkartanon": "Kymenlaakso",
+    # Etelä-Karjala
+    "Lappeen": "Etelä-Karjala",
+    # Etelä-Savo
+    "Pien-Savon": "Etelä-Savo",
+    "Suur-Savon": "Etelä-Savo",
+    "Savon": "Etelä-Savo",
+    "Rantasalmen": "Etelä-Savo",
+    "Juvan": "Etelä-Savo",
+    "Mäntyharjun": "Etelä-Savo",
+    # Pohjois-Savo
+    "Rautalammin": "Pohjois-Savo",
+    "Leppävirran": "Pohjois-Savo",
+    "Pielaveden": "Pohjois-Savo",
+    # Pohjois-Karjala
+    "Ilomantsin": "Pohjois-Karjala",
+    "Pielisjärven": "Pohjois-Karjala",
+    # Ahvenanmaa
+    "Ahvenanmaan": "Ahvenanmaa",
+    # Lappi
+    "Länsipohjan": "Lappi",
+    "Lapinmaan": "Lappi",
+    "Utsjoen": "Lappi",
+    # Luovutettu Karjala ja Inkeri (Viipuri siirretty tänne Etelä-Karjalasta)
+    "Jääsken": "Luovutettu Karjala ja Inkeri",
+    "Sortavalan": "Luovutettu Karjala ja Inkeri",
+    "Käkisalmen": "Luovutettu Karjala ja Inkeri",
+    "Kurkijoen": "Luovutettu Karjala ja Inkeri",
+    "Salmin": "Luovutettu Karjala ja Inkeri",
+    "Karjalan": "Luovutettu Karjala ja Inkeri",
+    "Kaprion": "Luovutettu Karjala ja Inkeri",
+    "Pähkinälinnan": "Luovutettu Karjala ja Inkeri",
+    "Ivangorodin": "Luovutettu Karjala ja Inkeri",
+    "Inkerin": "Luovutettu Karjala ja Inkeri",
 }
 
 
@@ -299,6 +359,13 @@ MAAKUNTA_AINEISTOT = {
         "Närpiön tuomiokunnan renovoidut tuomiokirjat",
         "Uudenkaarlepyyn raastuvanoikeuden renovoidut tuomiokirjat",
         "Pohjanmaan tuomiokunnan renovoidut tuomiokirjat",
+        "Korsholman tuomiokunnan renovoidut tuomiokirjat (HMA)",
+        "Korsholman pohjoisen tuomiokunnan renovoidut tuomiokirjat",
+        "Korsholman eteläisen tuomiokunnan renovoidut tuomiokirjat",
+        "Pietarsaaren raastuvanoikeuden renovoidut tuomiokirjat",
+        "Rådstuvurättens i Kristinestad arkiv (VMA)",
+        "Rådstuvurättens i Nykarleby arkiv (VMA)",
+        "Rådstuvurättens i Jakobstad arkiv (VMA)",
     ],
 }
 
@@ -318,6 +385,9 @@ def etsi_paikkakunta_aineistosta(aineistokokonaisuus):
         " laamannikunnan", " alisen ", " ylisen ", " itäisen ", " läntisen "
     ]
     paikkakunta = aineistokokonaisuus
+    ruots = re.match(r"Rådstuvurättens i (\S+)", aineistokokonaisuus)
+    if ruots:  # esim. "Rådstuvurättens i Kristinestad arkiv" → Kristinestad
+        paikkakunta = ruots.group(1)
     for erotin in erottimet:
         if erotin in paikkakunta.lower():
             paikkakunta = paikkakunta[:paikkakunta.lower().index(erotin)]
@@ -327,11 +397,13 @@ def etsi_paikkakunta_aineistosta(aineistokokonaisuus):
     paikkakunta = paikkakunta.split("(")[0].strip()
 
     # Haetaan maakunta hakemistosta
+    # Maakunta haetaan aineiston koko nimen alusta (sama logiikka kuin hakusuodattimessa).
+    # Pisin osuva avain voittaa, esim. "Pohjois-Pohjanmaan" ennen "Pohjanmaan".
     maakunta = None
-    for avain, mk in AINEISTO_MAAKUNTA.items():
-        if paikkakunta.lower().startswith(avain.lower()):
-            maakunta = mk
-            break
+    nimi = aineistokokonaisuus.lower()
+    osuvat = [a for a in AINEISTO_MAAKUNTA if nimi.startswith(a.lower())]
+    if osuvat:
+        maakunta = AINEISTO_MAAKUNTA[max(osuvat, key=len)]
 
     return paikkakunta if len(paikkakunta) > 2 else None, maakunta
 
@@ -383,6 +455,47 @@ def hae_api_avain():
     except Exception:
         pass
     return os.environ.get("KA_API_KEY")
+
+
+# ── Aikakaudet ja aineiston kattavuus ─────────────────────────────────────────
+# Tarkistettu Sisältöhausta 11/2026: tuomiokirja-indeksissä on n. 2,45 milj. sivua
+# vuodesta 1900 alkaen, valtaosa vuosilta 1900–1919. Vuosilta 1920–1949 n. 245 000
+# sivua (lähinnä Viipurin raastuvanoikeus ja hovioikeudet), vuoden 1950 jälkeen
+# vain 139 sivua (Kristiinankaupungin raastuvanoikeus).
+TUOMIOKIRJA_AIKAKAUDET = {
+    "Koko aineisto (1600–1950)": (1600, 1950),
+    "1600-luku": (1600, 1699),
+    "1700-luku": (1700, 1799),
+    "1800-luku": (1800, 1899),
+    "1900–1919": (1900, 1919),
+    "1920–1949 (lähinnä Viipuri ja kaupungit)": (1920, 1949),
+}
+
+
+def hae_aikakaudet(indeksi):
+    if on_yhdistelma(indeksi):
+        return {"Koko aineisto (1100–1950)": (1100, 1950), **{k: v for k, v in TUOMIOKIRJA_AIKAKAUDET.items() if k != "Koko aineisto (1600–1950)"}}
+    if indeksi == "voudintilit":
+        return {"Koko aineisto (1537–1634)": (1500, 1634)}
+    if indeksi == "df":
+        return {"Koko aineisto (keskiaika)": (1100, 1540)}
+    return TUOMIOKIRJA_AIKAKAUDET
+
+
+def aikavali_varoitus(indeksi, alku, loppu):
+    """Kertoo, jos valittu aikaväli osuu aikaan, jolta aineistoa on vähän."""
+    if indeksi in ("voudintilit", "df"):
+        return None
+    if alku >= 1950:
+        return ("Vuoden 1950 jälkeen tuomiokirja-aineistoa on vain noin 139 sivua "
+                "(Kristiinankaupungin raastuvanoikeus). Uudemmat tuomiokirjat ovat Astiassa "
+                "vain kuvina, eikä niitä voi hakea tekstinä.")
+    if alku >= 1920:
+        return ("Vuosilta 1920–1949 aineistoa on noin 245 000 sivua, lähinnä Viipurin "
+                "raastuvanoikeudesta ja hovioikeuksista. Maaseudun käräjäkirjoja on vähän.")
+    if loppu > 1950:
+        return "Vuoden 1950 jälkeen aineistoa on hyvin vähän, joten haku painottuu vanhempiin vuosiin."
+    return None
 
 
 # ── Hakulogiikka ──────────────────────────────────────────────────────────────
@@ -1397,22 +1510,28 @@ def main():
             help="Asiakirjasta pitää löytyä sekä hakusana että tämä sana.")
 
         st.subheader("Aikaväli")
-        if on_yhdistelma(indeksi_avain):
-            vuosi_minimi, vuosi_maksimi = 1100, 1950
-        elif indeksi_avain == "voudintilit":
-            vuosi_minimi, vuosi_maksimi = 1500, 1634
-        elif indeksi_avain == "df":
-            vuosi_minimi, vuosi_maksimi = 1100, 1500
+        aikakaudet = hae_aikakaudet(indeksi_avain)
+        aikakausi = st.selectbox(
+            "Aikakausi", options=list(aikakaudet.keys()) + ["Oma aikaväli"], index=0,
+            key=f"aikakausi_{indeksi_avain}",
+            help="Valmiit aikakaudet. 1900-luvun tuomiokirjoja on eniten vuosilta 1900–1919. "
+                 "Valitse 'Oma aikaväli', jos haluat kirjoittaa vuodet itse.")
+        if aikakausi == "Oma aikaväli":
+            oletus_alku, oletus_loppu = list(aikakaudet.values())[0]
+            col1, col2 = st.columns(2)
+            with col1:
+                vuosi_alku = st.number_input("Alkaen", min_value=1100, max_value=1990, value=oletus_alku, step=10)
+            with col2:
+                vuosi_loppu = st.number_input("Päättyen", min_value=1100, max_value=1990, value=oletus_loppu, step=10)
         else:
-            vuosi_minimi, vuosi_maksimi = 1600, 1950
-        col1, col2 = st.columns(2)
-        with col1:
-            vuosi_alku = st.number_input("Alkaen", min_value=1100, max_value=1980, value=vuosi_minimi, step=10)
-        with col2:
-            vuosi_loppu = st.number_input("Päättyen", min_value=1100, max_value=1980, value=vuosi_maksimi, step=10)
+            vuosi_alku, vuosi_loppu = aikakaudet[aikakausi]
+            st.caption(f"Haetaan vuosilta {vuosi_alku}–{vuosi_loppu}.")
         if vuosi_alku > vuosi_loppu:
             st.warning("Alkuvuosi on myöhempi kuin loppuvuosi. Haku käyttää vuosia toisin päin.")
             vuosi_alku, vuosi_loppu = vuosi_loppu, vuosi_alku
+        varoitus = aikavali_varoitus(indeksi_avain, vuosi_alku, vuosi_loppu)
+        if varoitus:
+            st.info(varoitus)
 
         kaikki_maakunnat = hae_kaikki_maakunnat()
         maakunta_valinta = st.selectbox(
@@ -1566,7 +1685,7 @@ def main():
           st.markdown("""
 | Aineisto | Sisältö | Aikaväli | Kieli |
 |---|---|---|---|
-| Tuomiokirjat | Yli 7 miljoonaa sivua käräjien pöytäkirjoja | 1600–1900-luvut | ruotsi, suomi |
+| Tuomiokirjat ja viranomaisaineistot | Yli 8,5 miljoonaa sivua käräjien pöytäkirjoja sekä hovioikeuksien ja lääninhallitusten asiakirjoja | 1600–1940-luvut (1900-luvulta eniten vuosilta 1900–1919) | ruotsi, suomi |
 | Voudintilit | Ruotsin vallan aikainen verotusaineisto | 1537–1634 | ruotsi |
 | Diplomatarium Fennicum | Keskiaikaiset asiakirjat | n. 1100–1540 | latina, ruotsi |
 """)
